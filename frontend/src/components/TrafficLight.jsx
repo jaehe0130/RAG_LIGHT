@@ -1,12 +1,14 @@
 import React from "react";
 
 const LIGHTS = [
-  { key: "GREEN", label: "안전", className: "green" },
-  { key: "YELLOW", label: "주의", className: "yellow" },
-  { key: "RED", label: "위험", className: "red" }
+  { key: "GREEN", label: "안전", description: "문제 가능성 낮음", className: "green" },
+  { key: "YELLOW", label: "주의", description: "추가 확인 필요", className: "yellow" },
+  { key: "RED", label: "위험", description: "신고서 검토 권장", className: "red" }
 ];
 
 function TrafficLight({ signal }) {
+  const activeLight = LIGHTS.find((light) => light.key === signal);
+
   return (
     <section className="result-panel traffic-panel" aria-label="신호등 판정">
       <div className="panel-heading">
@@ -17,23 +19,29 @@ function TrafficLight({ signal }) {
         <span className={`signal-badge ${signal.toLowerCase()}`}>{signal}</span>
       </div>
 
-      <div className="traffic-light">
-        {LIGHTS.map((light) => (
-          <div
-            key={light.key}
-            className={`traffic-dot ${light.className} ${signal === light.key ? "is-active" : ""}`}
-            aria-label={`${light.label} ${signal === light.key ? "활성" : "비활성"}`}
-          />
-        ))}
+      <div className="traffic-card-list">
+        {LIGHTS.map((light) => {
+          const isActive = signal === light.key;
+
+          return (
+            <article
+              key={light.key}
+              className={`traffic-card ${light.className} ${isActive ? "is-active" : ""}`}
+              aria-current={isActive ? "true" : undefined}
+            >
+              <span className="traffic-dot" />
+              <div>
+                <strong>{light.label}</strong>
+                <small>{light.description}</small>
+              </div>
+            </article>
+          );
+        })}
       </div>
 
-      <div className="light-labels">
-        {LIGHTS.map((light) => (
-          <span key={light.key} className={signal === light.key ? "is-active" : ""}>
-            {light.label}
-          </span>
-        ))}
-      </div>
+      <p className="signal-summary">
+        현재 문서는 <strong>{activeLight?.label}</strong> 단계로 분류되었습니다.
+      </p>
     </section>
   );
 }

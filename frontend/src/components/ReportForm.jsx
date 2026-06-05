@@ -7,7 +7,7 @@ function ReportForm({ reportText }) {
     try {
       await navigator.clipboard.writeText(reportText);
       setCopyState("copied");
-      window.setTimeout(() => setCopyState("idle"), 1600);
+      window.setTimeout(() => setCopyState("idle"), 1800);
     } catch {
       setCopyState("failed");
     }
@@ -20,7 +20,7 @@ function ReportForm({ reportText }) {
           <p className="eyebrow">Report</p>
           <h2>신고서 초안</h2>
         </div>
-        <span className="danger-chip">RED 전용</span>
+        <span className="danger-chip">RED 판정 전용</span>
       </div>
 
       <textarea readOnly value={reportText} aria-label="신고서 초안 내용" />
@@ -34,10 +34,10 @@ function ReportForm({ reportText }) {
         </button>
       </div>
 
-      {copyState === "copied" && <p className="feedback success">신고서 초안이 복사되었습니다.</p>}
+      {copyState === "copied" && <p className="feedback success">복사되었습니다.</p>}
       {copyState === "failed" && <p className="feedback">클립보드 복사에 실패했습니다.</p>}
 
-      {/* TODO: Add PDF download after report export policy and library choice are finalized. */}
+      {/* TODO: PDF 다운로드 기능은 신고서 포맷과 라이브러리 선택이 정해진 뒤 연결한다. */}
     </section>
   );
 }

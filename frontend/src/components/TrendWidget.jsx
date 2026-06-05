@@ -6,7 +6,7 @@ function TrendWidget({ statistics }) {
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Trend</p>
-          <h2>유사 피해 통계</h2>
+          <h2>유사 사례 통계</h2>
         </div>
       </div>
 
@@ -16,7 +16,7 @@ function TrendWidget({ statistics }) {
           <strong>{statistics.similar_case_count}</strong>
           <small>최근 매칭 건수</small>
         </article>
-        <article className="stat-card">
+        <article className="stat-card warning">
           <span>분쟁 비율</span>
           <strong>{statistics.dispute_rate}%</strong>
           <small>동일 유형 기준</small>

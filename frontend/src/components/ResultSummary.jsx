@@ -8,11 +8,14 @@ function ResultSummary({ result }) {
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Summary</p>
-          <h2>OCR 분석 요약</h2>
+          <h2>분석 요약</h2>
         </div>
       </div>
 
-      <p className="summary-copy">{result.summary}</p>
+      <div className="summary-callout">
+        <span>판정 설명</span>
+        <p>{result.summary}</p>
+      </div>
 
       <div className="ocr-box">
         <span className="field-label">OCR 추출 텍스트</span>
@@ -20,7 +23,7 @@ function ResultSummary({ result }) {
       </div>
 
       <div className="clause-list">
-        <span className="field-label">위험 또는 주의 문구</span>
+        <span className="field-label">문제 문구</span>
         <ul>
           {result.toxic_clauses.map((clause) => (
             <li key={clause}>{clause}</li>
@@ -36,6 +39,7 @@ function buildHighlightedText(text, clauses) {
     return text;
   }
 
+  // 긴 문장 안에서 독소 조항만 잘라 mark 태그로 감싼다.
   const escapedClauses = clauses.map(escapeRegExp);
   const pattern = new RegExp(`(${escapedClauses.join("|")})`, "g");
 
