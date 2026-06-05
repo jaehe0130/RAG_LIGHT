@@ -1,8 +1,7 @@
 import os
 import re
 from contextlib import redirect_stderr, redirect_stdout
-from io import BytesIO
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -67,8 +66,14 @@ def extract_text_from_image_path(
             warnings=[f"Image could not be loaded from path: {image_path}"],
         )
 
-    processed = _preprocess_image(image, warnings)
-    return _run_easyocr(processed, doc_type=doc_type, chunk_size=chunk_size, warnings=warnings)
+    processed, preprocessing = _preprocess_image(image, warnings)
+    return _run_easyocr(
+        processed,
+        doc_type=doc_type,
+        chunk_size=chunk_size,
+        warnings=warnings,
+        preprocessing=preprocessing,
+    )
 
 
 def extract_text_from_image_bytes(
@@ -96,18 +101,18 @@ def extract_text_from_image_bytes(
             warnings=["Image bytes could not be decoded."],
         )
 
-    processed = _preprocess_image(image, warnings)
-    return _run_easyocr(processed, doc_type=doc_type, chunk_size=chunk_size, warnings=warnings)
+    processed, preprocessing = _preprocess_image(image, warnings)
+    return _run_easyocr(
+        processed,
+        doc_type=doc_type,
+        chunk_size=chunk_size,
+        warnings=warnings,
+        preprocessing=preprocessing,
+    )
 
 
 def run_ocr_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """LangGraph-friendly OCR node wrapper.
-
-    Expected state keys:
-        image_path: optional path to an uploaded image
-        image_bytes: optional raw uploaded image bytes
-        doc_type: optional document type metadata
-    """
+    """LangGraph-friendly OCR node wrapper."""
     doc_type = state.get("doc_type", DEFAULT_DOC_TYPE)
 
     if state.get("image_bytes"):
@@ -144,8 +149,8 @@ def _pil_to_bgr(image: Image.Image) -> np.ndarray:
     return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
 
-def _preprocess_image(image: np.ndarray, warnings: List[str]) -> np.ndarray:
-    """Preprocess text-heavy images such as terms pages and ad screenshots."""
+def _preprocess_image(image: np.ndarray, warnings: List[str]) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Preprocess dense Korean terms/ad screenshots for OCR."""
     if len(image.shape) == 2:
         gray = image
     else:
@@ -154,11 +159,23 @@ def _preprocess_image(image: np.ndarray, warnings: List[str]) -> np.ndarray:
     height, width = gray.shape[:2]
     if height == 0 or width == 0:
         warnings.append("Loaded image has invalid dimensions.")
-        return gray
+        return gray, {
+            "grayscale": True,
+            "scale": 1.0,
+            "denoise": False,
+            "contrast": False,
+            "threshold": "skipped_invalid_dimensions",
+        }
 
-    scale = 2.0
-    if max(height, width) < 1200:
-        scale = 2.5
+    longest_side = max(height, width)
+    if longest_side < 900:
+        scale = 3.0
+    elif longest_side < 1600:
+        scale = 2.4
+    elif longest_side < 2400:
+        scale = 1.8
+    else:
+        scale = 1.25
 
     enlarged = cv2.resize(
         gray,
@@ -168,27 +185,37 @@ def _preprocess_image(image: np.ndarray, warnings: List[str]) -> np.ndarray:
         interpolation=cv2.INTER_CUBIC,
     )
 
-    denoised = cv2.fastNlMeansDenoising(
-        enlarged,
-        None,
-        h=10,
-        templateWindowSize=7,
-        searchWindowSize=21,
-    )
+    denoised = cv2.fastNlMeansDenoising(enlarged, None, h=7, templateWindowSize=7, searchWindowSize=21)
 
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=2.6, tileGridSize=(8, 8))
     contrasted = clahe.apply(denoised)
 
+    blurred = cv2.GaussianBlur(contrasted, (0, 0), sigmaX=1.0)
+    sharpened = cv2.addWeighted(contrasted, 1.45, blurred, -0.45, 0)
+
     binary = cv2.adaptiveThreshold(
-        contrasted,
+        sharpened,
         255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY,
-        31,
-        11,
+        41,
+        9,
     )
 
-    return binary
+    kernel = np.ones((1, 1), np.uint8)
+    cleaned = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    return cleaned, {
+        "grayscale": True,
+        "scale": scale,
+        "denoise": "fastNlMeansDenoising_h7",
+        "contrast": "CLAHE_clip2.6_tile8x8",
+        "sharpen": "unsharp_mask_1.45",
+        "threshold": "adaptive_gaussian_block41_c9",
+        "morphology": "open_1x1",
+        "input_size": {"width": width, "height": height},
+        "output_size": {"width": int(cleaned.shape[1]), "height": int(cleaned.shape[0])},
+    }
 
 
 def _run_easyocr(
@@ -196,6 +223,7 @@ def _run_easyocr(
     doc_type: str,
     chunk_size: int,
     warnings: Optional[List[str]] = None,
+    preprocessing: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     warnings = warnings or []
 
@@ -211,7 +239,7 @@ def _run_easyocr(
 
     items = _parse_easyocr_results(results)
     raw_text = "\n".join(item["text"] for item in items if item["text"]).strip()
-    cleaned_text = _clean_text(raw_text)
+    cleaned_text, postprocess_applied = _postprocess_text(raw_text)
     chunks = _chunk_text(cleaned_text, chunk_size=chunk_size)
     confidence = _average_confidence(items)
 
@@ -229,6 +257,8 @@ def _run_easyocr(
             "languages": OCR_LANGUAGES,
             "doc_type": doc_type,
             "result_count": len(items),
+            "preprocessing": preprocessing or {},
+            "postprocess_applied": postprocess_applied,
         },
     }
 
@@ -257,6 +287,67 @@ def _clean_text(text: str) -> str:
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def _postprocess_text(raw_text: str) -> Tuple[str, bool]:
+    cleaned = _clean_text(raw_text)
+    corrected = cleaned
+
+    corrected = _fix_contract_percent_misread(corrected)
+    corrected = _fix_common_korean_misreads(corrected)
+    corrected = _fix_percent_particle_noise(corrected)
+    corrected = _fix_contextual_semicolon(corrected)
+    corrected = _clean_text(corrected)
+
+    return corrected, corrected != cleaned
+
+
+def _fix_contract_percent_misread(text: str) -> str:
+    # EasyOCR can read "50%" as "509" in dense Korean legal text.
+    # Keep this limited to refund, penalty, and cancellation contexts.
+    context_words = r"(?:위약금|위약|환불|계약\s*해지|해지|부과|공제)"
+    suffix = r"(?=\s*(?:가|이|은|는|을|를|로|와|과|,|\.|;|\)|$))"
+    pattern = re.compile(rf"({context_words}[^\n]{{0,24}}?)509{suffix}")
+    text = pattern.sub(r"\g<1>50%", text)
+
+    compact_pattern = re.compile(rf"({context_words}[^\n]{{0,24}}?)50\s*9{suffix}")
+    return compact_pattern.sub(r"\g<1>50%", text)
+
+
+def _fix_common_korean_misreads(text: str) -> str:
+    replacements = {
+        "부과되니다": "부과됩니다",
+        "부과됩나다": "부과됩니다",
+        "부과됨니다": "부과됩니다",
+    }
+
+    for wrong, right in replacements.items():
+        text = text.replace(wrong, right)
+
+    return text
+
+
+def _fix_percent_particle_noise(text: str) -> str:
+    # Remove an OCR noise "1" only in percent + Korean particle + fee/action contexts.
+    # Examples: "50%가1 부과됩니다" -> "50%가 부과됩니다"
+    action_words = r"(?:부과|청구|적용)"
+    return re.sub(rf"(\d{{1,3}}%\s*가)\s*1\s*(?={action_words})", r"\1 ", text)
+
+
+def _fix_contextual_semicolon(text: str) -> str:
+    # Convert a semicolon to a period only when it follows a Korean sentence ending.
+    sentence_endings = (
+        "합니다",
+        "됩니다",
+        "습니다",
+        "입니다",
+        "없습니다",
+        "불가합니다",
+        "부과됩니다",
+    )
+    endings = "|".join(map(re.escape, sentence_endings))
+    text = re.sub(rf"({endings})\s*;", r"\1.", text)
+    return re.sub(r";(?=\s*$)", ".", text)
 
 
 def _chunk_text(text: str, chunk_size: int = DEFAULT_CHUNK_SIZE) -> List[str]:
@@ -316,5 +407,8 @@ def _build_empty_result(doc_type: str, warnings: List[str]) -> Dict[str, Any]:
             "engine": "easyocr",
             "languages": OCR_LANGUAGES,
             "doc_type": doc_type,
+            "result_count": 0,
+            "preprocessing": {},
+            "postprocess_applied": False,
         },
     }
