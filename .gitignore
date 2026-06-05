@@ -16,6 +16,7 @@ frontend/.env.local
 
 # Backend Uploads
 backend/uploads/
+qdrant_storage/
 
 # OS generated
 .DS_Store
