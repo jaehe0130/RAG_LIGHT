@@ -5,55 +5,63 @@ const DOC_TYPE_LABELS = {
   ad: "광고"
 };
 
-function UploadSection({ documentType, uploadedFile, isAnalyzing, analysisStep, onAnalyze }) {
+const ACCEPTED_FILE_TYPES = "image/*,.pdf,application/pdf";
+
+function UploadSection({ documentType, uploadedFiles = [], isAnalyzing, analysisStep, onAnalyze }) {
   const fileInputRef = useRef(null);
-  const [selectedFile, setSelectedFile] = useState(uploadedFile);
+  const [selectedFiles, setSelectedFiles] = useState(uploadedFiles);
   const [docType, setDocType] = useState(documentType);
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [fileError, setFileError] = useState("");
 
+  const firstFile = selectedFiles[0];
+  const firstFileIsImage = firstFile?.type.startsWith("image/");
+  const firstFileIsPdf = firstFile?.type === "application/pdf" || firstFile?.name.toLowerCase().endsWith(".pdf");
+
   useEffect(() => {
-    if (!selectedFile || fileError) {
+    if (!firstFile || !firstFileIsImage || fileError) {
       setPreviewUrl("");
       return undefined;
     }
 
-    const nextPreviewUrl = URL.createObjectURL(selectedFile);
+    const nextPreviewUrl = URL.createObjectURL(firstFile);
     setPreviewUrl(nextPreviewUrl);
 
     return () => URL.revokeObjectURL(nextPreviewUrl);
-  }, [selectedFile, fileError]);
+  }, [firstFile, firstFileIsImage, fileError]);
 
-  // 파일 검증은 업로드와 드래그 앤 드롭에서 같이 사용한다.
-  const selectFile = (file) => {
-    if (!file) {
+  // 파일 선택과 드래그 앤 드롭에서 같은 검증 로직을 사용한다.
+  const selectFiles = (fileList) => {
+    const nextFiles = Array.from(fileList || []);
+    if (nextFiles.length === 0) {
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
-      setSelectedFile(null);
-      setFileError("이미지 파일만 업로드할 수 있습니다. PNG, JPG, JPEG 파일을 선택해 주세요.");
+    const invalidFile = nextFiles.find((file) => !isAllowedFile(file));
+    if (invalidFile) {
+      setSelectedFiles([]);
+      setFileError("PDF 또는 이미지 파일만 업로드할 수 있습니다. JPG, PNG, PDF 파일을 선택해 주세요.");
       return;
     }
 
-    setSelectedFile(file);
+    setSelectedFiles(nextFiles);
     setFileError("");
   };
 
   const handleFileChange = (event) => {
-    selectFile(event.target.files?.[0]);
+    selectFiles(event.target.files);
   };
 
   const handleDrop = (event) => {
     event.preventDefault();
     setIsDragging(false);
-    selectFile(event.dataTransfer.files?.[0]);
+    selectFiles(event.dataTransfer.files);
   };
 
   const handleSubmit = () => {
     onAnalyze({
-      file: selectedFile,
+      files: selectedFiles,
       docType
     });
   };
@@ -63,15 +71,15 @@ function UploadSection({ documentType, uploadedFile, isAnalyzing, analysisStep, 
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Upload</p>
-          <h2>이미지 업로드</h2>
+          <h2>문서 업로드</h2>
         </div>
-        <span className={`file-state ${selectedFile ? "ready" : ""}`}>
-          {selectedFile ? "준비 완료" : "파일 필요"}
+        <span className={`file-state ${selectedFiles.length > 0 ? "ready" : ""}`}>
+          {selectedFiles.length > 0 ? `${selectedFiles.length}개 선택됨` : "파일 필요"}
         </span>
       </div>
 
       <div
-        className={`drop-zone ${isDragging ? "is-dragging" : ""} ${previewUrl ? "has-preview" : ""}`}
+        className={`drop-zone ${isDragging ? "is-dragging" : ""} ${selectedFiles.length > 0 ? "has-preview" : ""}`}
         onDragEnter={() => setIsDragging(true)}
         onDragOver={(event) => event.preventDefault()}
         onDragLeave={() => setIsDragging(false)}
@@ -80,22 +88,28 @@ function UploadSection({ documentType, uploadedFile, isAnalyzing, analysisStep, 
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept={ACCEPTED_FILE_TYPES}
+          multiple
           onChange={handleFileChange}
           className="visually-hidden"
         />
 
         {previewUrl ? (
           <div className="preview-frame">
-            <img src={previewUrl} alt="업로드한 문서 미리보기" />
+            <img src={previewUrl} alt="업로드한 이미지 미리보기" />
+          </div>
+        ) : firstFileIsPdf ? (
+          <div className="pdf-preview">
+            <strong>PDF</strong>
+            <span>{firstFile.name}</span>
           </div>
         ) : (
           <div className="drop-copy">
             <span className="upload-icon" aria-hidden="true">
               +
             </span>
-            <strong>약관 이미지 또는 광고 캡처본을 끌어오세요</strong>
-            <span>이미지를 선택하면 이곳에 미리보기가 표시됩니다.</span>
+            <strong>PDF, JPG, PNG 파일을 끌어오세요</strong>
+            <span>여러 파일을 한 번에 선택할 수 있습니다.</span>
           </div>
         )}
 
@@ -134,14 +148,25 @@ function UploadSection({ documentType, uploadedFile, isAnalyzing, analysisStep, 
 
       <div className="upload-meta">
         <div>
-          <span>파일명</span>
-          <strong>{selectedFile?.name || "선택된 파일 없음"}</strong>
+          <span>파일 수</span>
+          <strong>{selectedFiles.length > 0 ? `${selectedFiles.length}개` : "선택된 파일 없음"}</strong>
         </div>
         <div>
           <span>문서 타입</span>
           <strong>{DOC_TYPE_LABELS[docType]}</strong>
         </div>
       </div>
+
+      {selectedFiles.length > 0 && (
+        <ul className="file-list" aria-label="선택된 파일 목록">
+          {selectedFiles.map((file) => (
+            <li key={`${file.name}-${file.size}`}>
+              <span>{getFileBadge(file)}</span>
+              <strong>{file.name}</strong>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {isAnalyzing && (
         <div className="inline-loading" aria-live="polite">
@@ -155,13 +180,25 @@ function UploadSection({ documentType, uploadedFile, isAnalyzing, analysisStep, 
       <button
         type="button"
         className="primary-action"
-        disabled={!selectedFile || Boolean(fileError) || isAnalyzing}
+        disabled={selectedFiles.length === 0 || Boolean(fileError) || isAnalyzing}
         onClick={handleSubmit}
       >
         {isAnalyzing ? "분석 중" : "분석 시작"}
       </button>
     </section>
   );
+}
+
+function isAllowedFile(file) {
+  return file.type.startsWith("image/") || file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function getFileBadge(file) {
+  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+    return "PDF";
+  }
+
+  return "IMG";
 }
 
 export default UploadSection;

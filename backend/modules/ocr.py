@@ -13,6 +13,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 OCR_LANGUAGES = ["ko", "en"]
 DEFAULT_DOC_TYPE = "terms_or_ad"
 DEFAULT_CHUNK_SIZE = 800
+PDF_TEXT_MIN_LENGTH = 20
 
 _reader = None
 
@@ -36,28 +37,21 @@ def get_easyocr_reader():
     return _reader
 
 
-def _get_easyocr_cache_dir() -> Path:
-    cache_root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
-    if cache_root:
-        cache_dir = Path(cache_root) / "RAG_LIGHT" / "EasyOCR"
-    else:
-        cache_dir = Path.home() / ".cache" / "rag_light" / "easyocr"
-
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir
-
-
 def extract_text_from_image_path(
     image_path: str,
     doc_type: str = DEFAULT_DOC_TYPE,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
 ) -> Dict[str, Any]:
-    """Extract OCR text from an image path.
+    """Extract text from an image path or PDF path.
 
-    Local test example:
+    Local test examples:
         python -c "from modules.ocr import extract_text_from_image_path; print(extract_text_from_image_path('test.png'))"
+        python -c "from modules.ocr import extract_text_from_image_path; print(extract_text_from_image_path('sample.pdf'))"
     """
     warnings: List[str] = []
+
+    if _is_pdf_path(image_path):
+        return _extract_text_from_pdf_path(image_path, doc_type=doc_type, chunk_size=chunk_size, warnings=warnings)
 
     image = _load_image_from_path(image_path)
     if image is None:
@@ -73,6 +67,7 @@ def extract_text_from_image_path(
         chunk_size=chunk_size,
         warnings=warnings,
         preprocessing=preprocessing,
+        source_type="image",
     )
 
 
@@ -81,11 +76,7 @@ def extract_text_from_image_bytes(
     doc_type: str = DEFAULT_DOC_TYPE,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
 ) -> Dict[str, Any]:
-    """Extract OCR text from image bytes.
-
-    Local test example:
-        python -c "from pathlib import Path; from modules.ocr import extract_text_from_image_bytes; print(extract_text_from_image_bytes(Path('test.png').read_bytes()))"
-    """
+    """Extract text from image bytes or PDF bytes."""
     warnings: List[str] = []
 
     if not image_bytes:
@@ -93,6 +84,9 @@ def extract_text_from_image_bytes(
             doc_type=doc_type,
             warnings=["Image bytes are empty."],
         )
+
+    if _is_pdf_bytes(image_bytes):
+        return _extract_text_from_pdf_bytes(image_bytes, doc_type=doc_type, chunk_size=chunk_size, warnings=warnings)
 
     image = _load_image_from_bytes(image_bytes)
     if image is None:
@@ -108,6 +102,7 @@ def extract_text_from_image_bytes(
         chunk_size=chunk_size,
         warnings=warnings,
         preprocessing=preprocessing,
+        source_type="image",
     )
 
 
@@ -125,6 +120,134 @@ def run_ocr_node(state: Dict[str, Any]) -> Dict[str, Any]:
         doc_type=doc_type,
         warnings=["No image_path or image_bytes was provided to run_ocr_node."],
     )
+
+
+def _get_easyocr_cache_dir() -> Path:
+    cache_root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    if cache_root:
+        cache_dir = Path(cache_root) / "RAG_LIGHT" / "EasyOCR"
+    else:
+        cache_dir = Path.home() / ".cache" / "rag_light" / "easyocr"
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+def _is_pdf_path(file_path: str) -> bool:
+    return Path(file_path).suffix.lower() == ".pdf"
+
+
+def _is_pdf_bytes(file_bytes: bytes) -> bool:
+    return file_bytes[:5] == b"%PDF-"
+
+
+def _extract_text_from_pdf_path(
+    pdf_path: str,
+    doc_type: str,
+    chunk_size: int,
+    warnings: List[str],
+) -> Dict[str, Any]:
+    try:
+        import fitz
+
+        document = fitz.open(pdf_path)
+    except Exception as exc:
+        return _build_empty_result(doc_type=doc_type, warnings=[f"PDF could not be opened: {exc}"])
+
+    return _extract_text_from_pdf_document(document, doc_type=doc_type, chunk_size=chunk_size, warnings=warnings)
+
+
+def _extract_text_from_pdf_bytes(
+    pdf_bytes: bytes,
+    doc_type: str,
+    chunk_size: int,
+    warnings: List[str],
+) -> Dict[str, Any]:
+    try:
+        import fitz
+
+        document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception as exc:
+        return _build_empty_result(doc_type=doc_type, warnings=[f"PDF bytes could not be opened: {exc}"])
+
+    return _extract_text_from_pdf_document(document, doc_type=doc_type, chunk_size=chunk_size, warnings=warnings)
+
+
+def _extract_text_from_pdf_document(
+    document,
+    doc_type: str,
+    chunk_size: int,
+    warnings: List[str],
+) -> Dict[str, Any]:
+    raw_parts: List[str] = []
+    confidence_values: List[float] = []
+    page_modes: List[Dict[str, Any]] = []
+    preprocessing_steps: List[Dict[str, Any]] = []
+    ocr_result_count = 0
+
+    try:
+        page_count = len(document)
+        for page_index, page in enumerate(document):
+            page_text = _clean_text(page.get_text("text"))
+
+            if len(page_text) >= PDF_TEXT_MIN_LENGTH:
+                raw_parts.append(page_text)
+                page_modes.append({"page": page_index + 1, "mode": "text"})
+                continue
+
+            page_image = _render_pdf_page_to_bgr(page)
+            processed, preprocessing = _preprocess_image(page_image, warnings)
+            ocr_items = _read_easyocr_items(processed, warnings)
+            ocr_text = "\n".join(item["text"] for item in ocr_items if item["text"]).strip()
+
+            raw_parts.append(ocr_text)
+            preprocessing_steps.append({"page": page_index + 1, **preprocessing})
+            page_modes.append({"page": page_index + 1, "mode": "ocr"})
+            ocr_result_count += len(ocr_items)
+            confidence_values.extend(item["confidence"] for item in ocr_items if item.get("text"))
+    finally:
+        document.close()
+
+    raw_text = "\n\n".join(part for part in raw_parts if part).strip()
+    cleaned_text, postprocess_applied = _postprocess_text(raw_text)
+    chunks = _chunk_text(cleaned_text, chunk_size=chunk_size)
+
+    if not raw_text:
+        warnings.append("PDF text extraction and OCR result are both empty.")
+
+    return {
+        "raw_text": raw_text,
+        "cleaned_text": cleaned_text,
+        "chunks": chunks,
+        "confidence": _average_numbers(confidence_values) if confidence_values else (1.0 if raw_text else 0.0),
+        "warnings": warnings,
+        "metadata": {
+            "engine": "easyocr",
+            "languages": OCR_LANGUAGES,
+            "doc_type": doc_type,
+            "result_count": ocr_result_count,
+            "source_type": "pdf",
+            "pdf_engine": "pymupdf",
+            "pdf_pages": page_count,
+            "pdf_page_modes": page_modes,
+            "preprocessing": preprocessing_steps,
+            "postprocess_applied": postprocess_applied,
+        },
+    }
+
+
+def _render_pdf_page_to_bgr(page) -> np.ndarray:
+    # 2.5x roughly maps ordinary PDF pages to OCR-friendly resolution.
+    import fitz
+
+    matrix = fitz.Matrix(2.5, 2.5)
+    pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+    image = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(pixmap.height, pixmap.width, pixmap.n)
+
+    if pixmap.n == 1:
+        return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+
+    return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
 
 def _load_image_from_path(image_path: str) -> Optional[np.ndarray]:
@@ -177,14 +300,7 @@ def _preprocess_image(image: np.ndarray, warnings: List[str]) -> Tuple[np.ndarra
     else:
         scale = 1.25
 
-    enlarged = cv2.resize(
-        gray,
-        None,
-        fx=scale,
-        fy=scale,
-        interpolation=cv2.INTER_CUBIC,
-    )
-
+    enlarged = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
     denoised = cv2.fastNlMeansDenoising(enlarged, None, h=7, templateWindowSize=7, searchWindowSize=21)
 
     clahe = cv2.createCLAHE(clipLimit=2.6, tileGridSize=(8, 8))
@@ -224,20 +340,10 @@ def _run_easyocr(
     chunk_size: int,
     warnings: Optional[List[str]] = None,
     preprocessing: Optional[Dict[str, Any]] = None,
+    source_type: str = "image",
 ) -> Dict[str, Any]:
     warnings = warnings or []
-
-    try:
-        reader = get_easyocr_reader()
-        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
-            results = reader.readtext(image)
-    except Exception as exc:
-        return _build_empty_result(
-            doc_type=doc_type,
-            warnings=warnings + [f"EasyOCR failed: {exc}"],
-        )
-
-    items = _parse_easyocr_results(results)
+    items = _read_easyocr_items(image, warnings)
     raw_text = "\n".join(item["text"] for item in items if item["text"]).strip()
     cleaned_text, postprocess_applied = _postprocess_text(raw_text)
     chunks = _chunk_text(cleaned_text, chunk_size=chunk_size)
@@ -257,10 +363,23 @@ def _run_easyocr(
             "languages": OCR_LANGUAGES,
             "doc_type": doc_type,
             "result_count": len(items),
+            "source_type": source_type,
             "preprocessing": preprocessing or {},
             "postprocess_applied": postprocess_applied,
         },
     }
+
+
+def _read_easyocr_items(image: np.ndarray, warnings: List[str]) -> List[Dict[str, Any]]:
+    try:
+        reader = get_easyocr_reader()
+        with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+            results = reader.readtext(image)
+    except Exception as exc:
+        warnings.append(f"EasyOCR failed: {exc}")
+        return []
+
+    return _parse_easyocr_results(results)
 
 
 def _parse_easyocr_results(results: List[Tuple[Any, str, float]]) -> List[Dict[str, Any]]:
@@ -303,8 +422,6 @@ def _postprocess_text(raw_text: str) -> Tuple[str, bool]:
 
 
 def _fix_contract_percent_misread(text: str) -> str:
-    # EasyOCR can read "50%" as "509" in dense Korean legal text.
-    # Keep this limited to refund, penalty, and cancellation contexts.
     context_words = r"(?:위약금|위약|환불|계약\s*해지|해지|부과|공제)"
     suffix = r"(?=\s*(?:가|이|은|는|을|를|로|와|과|,|\.|;|\)|$))"
     pattern = re.compile(rf"({context_words}[^\n]{{0,24}}?)509{suffix}")
@@ -328,14 +445,11 @@ def _fix_common_korean_misreads(text: str) -> str:
 
 
 def _fix_percent_particle_noise(text: str) -> str:
-    # Remove an OCR noise "1" only in percent + Korean particle + fee/action contexts.
-    # Examples: "50%가1 부과됩니다" -> "50%가 부과됩니다"
     action_words = r"(?:부과|청구|적용)"
     return re.sub(rf"(\d{{1,3}}%\s*가)\s*1\s*(?={action_words})", r"\1 ", text)
 
 
 def _fix_contextual_semicolon(text: str) -> str:
-    # Convert a semicolon to a period only when it follows a Korean sentence ending.
     sentence_endings = (
         "합니다",
         "됩니다",
@@ -390,10 +504,14 @@ def _split_by_length(text: str, chunk_size: int) -> List[str]:
 
 def _average_confidence(items: List[Dict[str, Any]]) -> float:
     confidences = [item["confidence"] for item in items if item.get("text")]
-    if not confidences:
+    return _average_numbers(confidences)
+
+
+def _average_numbers(values: List[float]) -> float:
+    if not values:
         return 0.0
 
-    return round(sum(confidences) / len(confidences), 4)
+    return round(sum(values) / len(values), 4)
 
 
 def _build_empty_result(doc_type: str, warnings: List[str]) -> Dict[str, Any]:
