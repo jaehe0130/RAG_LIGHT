@@ -25,4 +25,5 @@ easyocr
 opencv-python
 numpy
 Pillow
+PyMuPDF
 

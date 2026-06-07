@@ -14,18 +14,19 @@ const ANALYSIS_STEPS = [
 
 function App() {
   const [analysisResult, setAnalysisResult] = useState(null);
-  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   const [documentType, setDocumentType] = useState("terms");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState("");
 
-  const handleAnalyze = ({ file, docType }) => {
-    setUploadedFile(file);
+  const handleAnalyze = ({ files, docType }) => {
+    const nextFiles = files || [];
+    setUploadedFiles(nextFiles);
     setDocumentType(docType);
     setIsAnalyzing(true);
     setAnalysisResult(null);
 
-    // Mock 단계 표시: 백엔드 연결 전까지 실제 분석처럼 보이게 만든다.
+    // 백엔드 연결 전까지 실제 분석처럼 보이도록 단계 문구를 순서대로 보여준다.
     ANALYSIS_STEPS.forEach((step, index) => {
       window.setTimeout(() => setAnalysisStep(step), index * 520);
     });
@@ -34,7 +35,7 @@ function App() {
       setAnalysisResult({
         ...mockAnalysisResult,
         metadata: {
-          file_name: file?.name || "mock-document.png",
+          file_names: nextFiles.map((file) => file.name),
           doc_type: docType
         }
       });
@@ -42,7 +43,7 @@ function App() {
       setAnalysisStep("");
     }, 1700);
 
-    // TODO: Replace mock data with backend API call when Team A completes routing.
+    // TODO: Team A가 백엔드 라우팅을 완성하면 여기서 실제 API 호출로 교체한다.
   };
 
   return (
@@ -58,7 +59,7 @@ function App() {
       <main className="workspace">
         <UploadSection
           documentType={documentType}
-          uploadedFile={uploadedFile}
+          uploadedFiles={uploadedFiles}
           isAnalyzing={isAnalyzing}
           analysisStep={analysisStep}
           onAnalyze={handleAnalyze}
