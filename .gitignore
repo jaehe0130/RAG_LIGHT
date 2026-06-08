@@ -21,3 +21,6 @@ qdrant_storage/
 # OS generated
 .DS_Store
 Thumbs.db
+
+# PDFs
+*.pdf
