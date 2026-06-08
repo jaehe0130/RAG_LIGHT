@@ -3,7 +3,7 @@ from typing import List, Dict, Any, TypedDict
 
 # 1. LangGraph 노드 간 실시간 데이터 공유 및 상태 관리를 위한 바구니
 class AgentState(TypedDict):
-    image_path: str               # 이미지 파일 경로
+    file_path: str                # 업로드된 파일 경로 (이미지 및 PDF)
     input_type: str               # "CONTRACT"(약관) 또는 "AD"(광고) 분기 플래그
     raw_text: str                 # OCR 추출 원본 텍스트
     

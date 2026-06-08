@@ -19,7 +19,7 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState("");
 
-  const handleAnalyze = ({ files, docType }) => {
+  const handleAnalyze = async ({ files, docType }) => {
     const nextFiles = files || [];
     setUploadedFiles(nextFiles);
     setDocumentType(docType);
@@ -31,19 +31,49 @@ function App() {
       window.setTimeout(() => setAnalysisStep(step), index * 520);
     });
 
-    window.setTimeout(() => {
+    if (nextFiles.length === 0) {
+      setIsAnalyzing(false);
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", nextFiles[0]);
+      formData.append("input_type", docType);
+
+      const response = await fetch("http://localhost:8000/api/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("서버 응답 오류");
+      }
+
+      const resultData = await response.json();
+      
       setAnalysisResult({
-        ...mockAnalysisResult,
+        signal: resultData.analysis.signal_color || "RED",
+        summary: resultData.analysis.main_warning || "분석 완료",
+        ocr_text: resultData.ocr_text || "",
+        toxic_clauses: resultData.analysis.toxic_clauses || [],
+        statistics: {
+          similar_case_count: resultData.statistics?.similar_cases_count || 0,
+          dispute_rate: resultData.statistics?.dispute_rate || 0
+        },
+        report_form: resultData.report_form?.content || "",
         metadata: {
           file_names: nextFiles.map((file) => file.name),
           doc_type: docType
         }
       });
+    } catch (error) {
+      console.error("분석 중 오류 발생:", error);
+      alert("분석 요청 중 오류가 발생했습니다.");
+    } finally {
       setIsAnalyzing(false);
       setAnalysisStep("");
-    }, 1700);
-
-    // TODO: Team A가 백엔드 라우팅을 완성하면 여기서 실제 API 호출로 교체한다.
+    }
   };
 
   return (

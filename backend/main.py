@@ -55,9 +55,12 @@ compiled_graph = workflow.compile()
 @app.post("/api/analyze", response_model=AnalysisResponse)
 async def analyze_contract(
     file: UploadFile = File(...),
-    input_type: str = Form(...) # 프론트에서 "CONTRACT" 혹은 "AD" 문자열을 넘겨받음
+    input_type: str = Form(...) # 프론트에서 "terms" 혹은 "ad" 문자열을 넘겨받음
 ):
-    # 1. 수신된 약관/광고 이미지 파일 저장
+    # 프론트엔드 파라미터를 백엔드 상수로 매핑
+    backend_input_type = "CONTRACT" if input_type == "terms" else "AD"
+    
+    # 1. 수신된 약관/광고 문서 파일 저장
     os.makedirs("uploads", exist_ok=True)
     file_path = os.path.join("uploads", file.filename)
     with open(file_path, "wb") as buffer:
@@ -65,7 +68,7 @@ async def analyze_contract(
         
     # 2. 초기 상태 바구니 채우고 LangGraph 가동
     initial_state = {
-        "image_path": file_path, "input_type": input_type, "raw_text": "",
+        "file_path": file_path, "input_type": backend_input_type, "raw_text": "",
         "retrieved_ftc_docs": [], "retrieved_kca_docs": [],
         "llm_analysis": "", "toxic_clauses": [], "signal_color": "", "report_draft": ""
     }
