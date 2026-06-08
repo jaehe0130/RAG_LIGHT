@@ -19,7 +19,10 @@ from sentence_transformers import SentenceTransformer
 load_dotenv()
 
 RAW_DIR = Path(__file__).parent / "raw"
-QDRANT_PATH = str(Path(__file__).parent.parent / "qdrant_storage")
+QDRANT_PATH = str(Path(__file__).parent / "qdrant_storage")
+# colab
+# RAW_DIR = Path("/content/drive/MyDrive/Colab Notebooks/**개인 경로 넣기**")
+# QDRANT_PATH = "/content/qdrant_storage"
 COLLECTION_NAME = "ftc_decisions"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
 VECTOR_DIM = 1024
@@ -74,7 +77,9 @@ def ingest_data_to_qdrant():
 
     for idx, hybrid_path in enumerate(hybrid_files, start=1):
         # 파일명에서 "_hybrid" 접미사를 "_metadata"로 교체하여 쌍 파일 경로 구성
-        metadata_path = hybrid_path.parent / hybrid_path.name.replace("_hybrid.json", "_metadata.json")
+        metadata_path = hybrid_path.parent / hybrid_path.name.replace(
+            "_hybrid.json", "_metadata.json"
+        )
         base_name = hybrid_path.name.replace("_hybrid.json", "")
 
         print(f"[{idx:>3}/{total}] {base_name}")
@@ -90,8 +95,7 @@ def ingest_data_to_qdrant():
 
         # 전체 청크에 대한 point ID 계산
         chunk_pid_pairs = [
-            (chunk, _to_point_id(chunk["metadata"]["chunk_id"]))
-            for chunk in chunks
+            (chunk, _to_point_id(chunk["metadata"]["chunk_id"])) for chunk in chunks
         ]
 
         # 이미 적재된 chunk는 건너뜀 (중복 실행 방지)
@@ -106,7 +110,9 @@ def ingest_data_to_qdrant():
 
         # 문서 임베딩: "passage: " 접두사 부착
         texts = ["passage: " + c["page_content"] for c, _ in new_pairs]
-        embeddings = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+        embeddings = model.encode(
+            texts, normalize_embeddings=True, show_progress_bar=False
+        )
 
         # payload: 청크 메타데이터 + 사건 정보 병합
         points = [
@@ -117,10 +123,10 @@ def ingest_data_to_qdrant():
                     **chunk["metadata"],
                     "page_content": chunk["page_content"],
                     "의결서관리번호": doc_meta.get("의결서관리번호"),
-                    "의결서제목":    doc_meta.get("의결서제목"),
-                    "공개일자":      doc_meta.get("공개일자"),
-                    "의결서파일명":  doc_meta.get("의결서파일명"),
-                    "피심인정보":    doc_meta.get("피심인정보", []),
+                    "의결서제목": doc_meta.get("의결서제목"),
+                    "공개일자": doc_meta.get("공개일자"),
+                    "의결서파일명": doc_meta.get("의결서파일명"),
+                    "피심인정보": doc_meta.get("피심인정보", []),
                 },
             )
             for (chunk, pid), embedding in zip(new_pairs, embeddings)
