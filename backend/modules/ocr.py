@@ -60,13 +60,12 @@ def extract_text_from_image_path(
             warnings=[f"Image could not be loaded from path: {image_path}"],
         )
 
-    processed, preprocessing = _preprocess_image(image, warnings)
-    return _run_easyocr(
-        processed,
+    variants = _preprocess_image_variants(image, warnings)
+    return _run_easyocr_variants(
+        variants,
         doc_type=doc_type,
         chunk_size=chunk_size,
         warnings=warnings,
-        preprocessing=preprocessing,
         source_type="image",
     )
 
@@ -95,13 +94,12 @@ def extract_text_from_image_bytes(
             warnings=["Image bytes could not be decoded."],
         )
 
-    processed, preprocessing = _preprocess_image(image, warnings)
-    return _run_easyocr(
-        processed,
+    variants = _preprocess_image_variants(image, warnings)
+    return _run_easyocr_variants(
+        variants,
         doc_type=doc_type,
         chunk_size=chunk_size,
         warnings=warnings,
-        preprocessing=preprocessing,
         source_type="image",
     )
 
@@ -111,15 +109,37 @@ def run_ocr_node(state: Dict[str, Any]) -> Dict[str, Any]:
     doc_type = state.get("doc_type", DEFAULT_DOC_TYPE)
 
     if state.get("image_bytes"):
-        return extract_text_from_image_bytes(state["image_bytes"], doc_type=doc_type)
+        return _prepare_graph_ocr_result(extract_text_from_image_bytes(state["image_bytes"], doc_type=doc_type))
 
     if state.get("image_path"):
-        return extract_text_from_image_path(state["image_path"], doc_type=doc_type)
+        return _prepare_graph_ocr_result(extract_text_from_image_path(state["image_path"], doc_type=doc_type))
+
+    if state.get("file_path"):
+        return _prepare_graph_ocr_result(extract_text_from_image_path(state["file_path"], doc_type=doc_type))
 
     return _build_empty_result(
         doc_type=doc_type,
-        warnings=["No image_path or image_bytes was provided to run_ocr_node."],
+        warnings=["No image_path, file_path, or image_bytes was provided to run_ocr_node."],
     )
+
+
+def _prepare_graph_ocr_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Use postprocessed OCR text for the LangGraph/API path.
+
+    main.py currently reads final_output["raw_text"], so Team B exposes the
+    cleaned OCR text through raw_text only for the graph state. The standalone
+    extract_* functions still keep raw_text as the EasyOCR original.
+    """
+    cleaned_text = result.get("cleaned_text") or result.get("raw_text") or ""
+    original_raw_text = result.get("raw_text", "")
+
+    if cleaned_text != original_raw_text:
+        metadata = dict(result.get("metadata") or {})
+        metadata["graph_raw_text_source"] = "cleaned_text"
+        metadata["easyocr_raw_text_preserved"] = True
+        result = {**result, "metadata": metadata}
+
+    return {**result, "raw_text": cleaned_text}
 
 
 def _get_easyocr_cache_dir() -> Path:
@@ -196,8 +216,8 @@ def _extract_text_from_pdf_document(
                 continue
 
             page_image = _render_pdf_page_to_bgr(page)
-            processed, preprocessing = _preprocess_image(page_image, warnings)
-            ocr_items = _read_easyocr_items(processed, warnings)
+            variants = _preprocess_image_variants(page_image, warnings)
+            ocr_items, preprocessing = _read_best_easyocr_items(variants, warnings)
             ocr_text = "\n".join(item["text"] for item in ocr_items if item["text"]).strip()
 
             raw_parts.append(ocr_text)
@@ -270,6 +290,146 @@ def _pil_to_bgr(image: Image.Image) -> np.ndarray:
     image = ImageOps.exif_transpose(image).convert("RGB")
     rgb = np.array(image)
     return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
+
+def _preprocess_image_variants(image: np.ndarray, warnings: List[str]) -> List[Tuple[str, np.ndarray, Dict[str, Any]]]:
+    """Build several OCR-ready variants for JPG/PNG quality differences."""
+    if len(image.shape) == 2:
+        gray = image
+    else:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    height, width = gray.shape[:2]
+    if height == 0 or width == 0:
+        warnings.append("Loaded image has invalid dimensions.")
+        return [
+            (
+                "invalid_original",
+                gray,
+                {
+                    "variant": "invalid_original",
+                    "grayscale": True,
+                    "scale": 1.0,
+                    "threshold": "skipped_invalid_dimensions",
+                },
+            )
+        ]
+
+    longest_side = max(height, width)
+    target_longest_side = 2200
+    scale = max(1.0, min(3.2, target_longest_side / longest_side))
+
+    if len(image.shape) == 2:
+        color_source = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    else:
+        color_source = image
+
+    enlarged_color = cv2.resize(color_source, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    enlarged = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+
+    # Gentle denoise keeps small Korean strokes sharper than aggressive smoothing.
+    denoised = cv2.bilateralFilter(enlarged, d=5, sigmaColor=35, sigmaSpace=35)
+
+    clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+    contrasted = clahe.apply(denoised)
+
+    blurred = cv2.GaussianBlur(contrasted, (0, 0), sigmaX=0.8)
+    sharpened = cv2.addWeighted(contrasted, 1.55, blurred, -0.55, 0)
+
+    adaptive = cv2.adaptiveThreshold(
+        sharpened,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        35,
+        7,
+    )
+
+    _, otsu = cv2.threshold(
+        cv2.GaussianBlur(sharpened, (3, 3), 0),
+        0,
+        255,
+        cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+    )
+
+    base_metadata = {
+        "grayscale": True,
+        "applied": True,
+        "candidate_count": 5,
+        "scale": round(scale, 3),
+        "input_size": {"width": width, "height": height},
+        "output_size": {"width": int(sharpened.shape[1]), "height": int(sharpened.shape[0])},
+        "denoise": "bilateral_d5_sigma35",
+        "contrast": "CLAHE_clip2.2_tile8x8",
+        "sharpen": "unsharp_mask_1.55",
+    }
+
+    variants = [
+        (
+            "resized_color",
+            enlarged_color,
+            {
+                **base_metadata,
+                "variant": "resized_color",
+                "threshold": "none",
+            },
+        ),
+        (
+            "resized_gray",
+            enlarged,
+            {
+                **base_metadata,
+                "variant": "resized_gray",
+                "threshold": "none",
+            },
+        ),
+        (
+            "enhanced_gray",
+            sharpened,
+            {
+                **base_metadata,
+                "variant": "enhanced_gray",
+                "threshold": "none",
+            },
+        ),
+        (
+            "adaptive_binary",
+            adaptive,
+            {
+                **base_metadata,
+                "variant": "adaptive_binary",
+                "threshold": "adaptive_gaussian_block35_c7",
+            },
+        ),
+        (
+            "otsu_binary",
+            otsu,
+            {
+                **base_metadata,
+                "variant": "otsu_binary",
+                "threshold": "otsu",
+            },
+        ),
+    ]
+
+    if float(np.mean(gray)) < 100:
+        inverted = cv2.bitwise_not(sharpened)
+        variants.append(
+            (
+                "inverted_dark_background",
+                inverted,
+                {
+                    **base_metadata,
+                    "variant": "inverted_dark_background",
+                    "threshold": "none",
+                },
+            )
+        )
+
+    for _, _, metadata in variants:
+        metadata["candidate_count"] = len(variants)
+
+    return variants
 
 
 def _preprocess_image(image: np.ndarray, warnings: List[str]) -> Tuple[np.ndarray, Dict[str, Any]]:
@@ -370,16 +530,167 @@ def _run_easyocr(
     }
 
 
+def _run_easyocr_variants(
+    variants: List[Tuple[str, np.ndarray, Dict[str, Any]]],
+    doc_type: str,
+    chunk_size: int,
+    warnings: Optional[List[str]] = None,
+    source_type: str = "image",
+) -> Dict[str, Any]:
+    warnings = warnings or []
+    items, preprocessing = _read_best_easyocr_items(variants, warnings)
+    raw_text = "\n".join(item["text"] for item in items if item["text"]).strip()
+    cleaned_text, postprocess_applied = _postprocess_text(raw_text)
+    chunks = _chunk_text(cleaned_text, chunk_size=chunk_size)
+    confidence = _average_confidence(items)
+
+    if not raw_text:
+        warnings.append("OCR result is empty. The image may be blank, too blurry, or unsupported.")
+
+    return {
+        "raw_text": raw_text,
+        "cleaned_text": cleaned_text,
+        "chunks": chunks,
+        "confidence": confidence,
+        "warnings": warnings,
+        "metadata": {
+            "engine": "easyocr",
+            "languages": OCR_LANGUAGES,
+            "doc_type": doc_type,
+            "result_count": len(items),
+            "source_type": source_type,
+            "preprocessing": preprocessing,
+            "postprocess_applied": postprocess_applied,
+        },
+    }
+
+
+def _read_best_easyocr_items(
+    variants: List[Tuple[str, np.ndarray, Dict[str, Any]]],
+    warnings: List[str],
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    best_items: List[Dict[str, Any]] = []
+    best_metadata: Dict[str, Any] = {}
+    best_score = -1.0
+    variant_scores = []
+
+    for variant_name, variant_image, metadata in variants:
+        local_warnings: List[str] = []
+        items = _read_easyocr_items(variant_image, local_warnings)
+        text = "\n".join(item["text"] for item in items if item["text"]).strip()
+        confidence = _average_confidence(items)
+        score = _score_ocr_candidate(text, confidence, len(items))
+
+        variant_scores.append(
+            {
+                "variant": variant_name,
+                "score": round(score, 4),
+                "confidence": confidence,
+                "result_count": len(items),
+                "text_length": len(text),
+            }
+        )
+
+        if local_warnings:
+            warnings.extend(local_warnings)
+
+        if score > best_score:
+            best_score = score
+            best_items = items
+            best_metadata = metadata
+
+    return best_items, {
+        **best_metadata,
+        "selected_variant": best_metadata.get("variant"),
+        "variant_scores": variant_scores,
+    }
+
+
+def _score_ocr_candidate(text: str, confidence: float, result_count: int) -> float:
+    text_length_score = min(len(text) / 700, 1.0)
+    count_score = min(result_count / 30, 1.0) * 0.25
+    korean_count = len(re.findall(r"[가-힣]", text))
+    digit_count = len(re.findall(r"\d", text))
+    question_count = text.count("?")
+    korean_score = min(korean_count / 80, 1.0) * 0.45
+    digit_score = min(digit_count / 12, 1.0) * 0.12
+    question_penalty = min(question_count / max(len(text), 1), 1.0) * 0.8
+    return (confidence * 1.45) + text_length_score + count_score + korean_score + digit_score - question_penalty
+
+
+def _score_ocr_candidate(text: str, confidence: float, result_count: int) -> float:
+    text_length_score = min(len(text) / 700, 1.0)
+    count_score = min(result_count / 30, 1.0) * 0.25
+    korean_count = len(re.findall(r"[\uac00-\ud7a3]", text))
+    digit_count = len(re.findall(r"\d", text))
+    question_count = text.count("?")
+    sentence_ending_count = len(re.findall(r"(?:\ub2c8\ub2e4|[.!?])", text))
+    incomplete_action_count = len(re.findall(r"(?:\ubd80\uacfc|\uccad\uad6c|\uc801\uc6a9)\s*(?:\n|$)", text))
+
+    korean_score = min(korean_count / 80, 1.0) * 0.45
+    digit_score = min(digit_count / 12, 1.0) * 0.12
+    sentence_score = min(sentence_ending_count / 8, 1.0) * 0.35
+    question_penalty = min(question_count / max(len(text), 1), 1.0) * 0.8
+    incomplete_action_penalty = incomplete_action_count * 0.45
+
+    return (
+        (confidence * 1.15)
+        + text_length_score
+        + count_score
+        + korean_score
+        + digit_score
+        + sentence_score
+        - question_penalty
+        - incomplete_action_penalty
+    )
+
+
 def _read_easyocr_items(image: np.ndarray, warnings: List[str]) -> List[Dict[str, Any]]:
     try:
         reader = get_easyocr_reader()
+        read_configs = [
+            {
+                "decoder": "beamsearch",
+                "beamWidth": 5,
+                "paragraph": False,
+                "contrast_ths": 0.05,
+                "adjust_contrast": 0.7,
+                "text_threshold": 0.55,
+                "low_text": 0.3,
+                "link_threshold": 0.4,
+                "canvas_size": 2560,
+                "mag_ratio": 1.2,
+            },
+            {
+                "decoder": "greedy",
+                "paragraph": False,
+                "text_threshold": 0.35,
+                "low_text": 0.2,
+                "link_threshold": 0.3,
+                "canvas_size": 3200,
+                "mag_ratio": 1.6,
+            },
+        ]
+
+        best_items: List[Dict[str, Any]] = []
+        best_score = -1.0
+
         with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
-            results = reader.readtext(image)
+            for read_config in read_configs:
+                results = reader.readtext(image, **read_config)
+                items = _parse_easyocr_results(results)
+                text = "\n".join(item["text"] for item in items if item["text"]).strip()
+                confidence = _average_confidence(items)
+                score = _score_ocr_candidate(text, confidence, len(items))
+
+                if score > best_score:
+                    best_score = score
+                    best_items = items
     except Exception as exc:
         warnings.append(f"EasyOCR failed: {exc}")
         return []
 
-    return _parse_easyocr_results(results)
+    return best_items
 
 
 def _parse_easyocr_results(results: List[Tuple[Any, str, float]]) -> List[Dict[str, Any]]:
@@ -462,6 +773,68 @@ def _fix_contextual_semicolon(text: str) -> str:
     endings = "|".join(map(re.escape, sentence_endings))
     text = re.sub(rf"({endings})\s*;", r"\1.", text)
     return re.sub(r";(?=\s*$)", ".", text)
+
+
+def _fix_contract_percent_misread(text: str) -> str:
+    context_words = (
+        r"(?:"
+        r"\uc704\uc57d\uae08|\uc704\uc57d|\ud658\ubd88|"
+        r"\uacc4\uc57d\s*\ud574\uc9c0|\ud574\uc9c0|"
+        r"\ubd80\uacfc|\uccad\uad6c|\uacf5\uc81c"
+        r")"
+    )
+    suffix = (
+        r"(?=\s*(?:"
+        r"\uac00|\uc740|\ub294|\uc774|\uc744|\ub97c|\ub85c|"
+        r"\ubd80\uacfc|\uccad\uad6c|\uc801\uc6a9|\uacf5\uc81c|"
+        r",|\.|;|\)|$"
+        r"))"
+    )
+
+    # EasyOCR can read '%' as '9' or '96' near fee/refund clauses.
+    pattern = re.compile(rf"({context_words}[^\n]{{0,32}}?)(\d{{1,3}})\s*9\s*6?{suffix}")
+    text = pattern.sub(r"\g<1>\g<2>%", text)
+
+    missing_particle_pattern = re.compile(
+        rf"({context_words}[^\n]{{0,32}}?)(\d{{1,3}})\s*9\s*[67]?\s+(?=(?:\ubd80\uacfc|\uccad\uad6c|\uc801\uc6a9))"
+    )
+    return missing_particle_pattern.sub(lambda match: f"{match.group(1)}{match.group(2)}%\uac00 ", text)
+
+
+def _fix_common_korean_misreads(text: str) -> str:
+    replacements = {
+        "\ubd80\uacfc\ub418\ub2c8\ub2e4": "\ubd80\uacfc\ub429\ub2c8\ub2e4",
+        "\ubd80\uacfc\ub428\ub2c8\ub2e4": "\ubd80\uacfc\ub429\ub2c8\ub2e4",
+        "\ubd80\uacfc\ud295\ub2c8\ub2e4": "\ubd80\uacfc\ub429\ub2c8\ub2e4",
+        "\ubd80\uacfc\ud2f0\ub2c8\ub2e4": "\ubd80\uacfc\ub429\ub2c8\ub2e4",
+        "\uccad\uad6c\ub418\ub2c8\ub2e4": "\uccad\uad6c\ub429\ub2c8\ub2e4",
+        "\uccad\uad6c\uc6d4\ub2c8\ub2e4": "\uccad\uad6c\ub429\ub2c8\ub2e4",
+    }
+
+    for wrong, right in replacements.items():
+        text = text.replace(wrong, right)
+
+    return text
+
+
+def _fix_percent_particle_noise(text: str) -> str:
+    action_words = r"(?:\ubd80\uacfc|\uccad\uad6c|\uc801\uc6a9)"
+    return re.sub(rf"(\d{{1,3}}%\s*\uac00)\s*1\s*(?={action_words})", r"\1 ", text)
+
+
+def _fix_contextual_semicolon(text: str) -> str:
+    sentence_endings = (
+        "\ud569\ub2c8\ub2e4",
+        "\ub429\ub2c8\ub2e4",
+        "\uc2b5\ub2c8\ub2e4",
+        "\uc785\ub2c8\ub2e4",
+        "\uc5c6\uc2b5\ub2c8\ub2e4",
+        "\ubd88\uac00\ud569\ub2c8\ub2e4",
+        "\ubd80\uacfc\ub429\ub2c8\ub2e4",
+    )
+    endings = "|".join(map(re.escape, sentence_endings))
+    text = re.sub(rf"({endings})\s*[;:]", r"\1.", text)
+    return re.sub(r"[;:](?=\s*$)", ".", text)
 
 
 def _chunk_text(text: str, chunk_size: int = DEFAULT_CHUNK_SIZE) -> List[str]:

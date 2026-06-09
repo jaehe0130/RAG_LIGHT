@@ -1,7 +1,9 @@
 import React from "react";
 
 function ResultSummary({ result }) {
-  const highlightedText = buildHighlightedText(result.ocr_text, result.toxic_clauses);
+  const clauses = result.toxic_clauses || [];
+  const highlightedText = buildHighlightedText(result.ocr_text, clauses);
+  const ocrLength = result.ocr_text?.trim().length || 0;
 
   return (
     <section className="result-panel summary-panel" aria-label="OCR 결과 요약">
@@ -17,18 +19,33 @@ function ResultSummary({ result }) {
         <p>{result.summary}</p>
       </div>
 
-      <div className="ocr-box">
-        <span className="field-label">OCR 추출 텍스트</span>
-        <p>{highlightedText}</p>
+      <div className="warning-phrases">
+        <span className="field-label">위험 또는 주의 문구</span>
+        {clauses.length > 0 ? (
+          <ul>
+            {clauses.map((clause) => (
+              <li key={clause}>{clause}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="empty-note">현재 응답에서 별도 위험 또는 주의 문구가 검출되지 않았습니다.</p>
+        )}
       </div>
 
-      <div className="clause-list">
-        <span className="field-label">문제 문구</span>
-        <ul>
-          {result.toxic_clauses.map((clause) => (
-            <li key={clause}>{clause}</li>
-          ))}
-        </ul>
+      <div className="ocr-quality">
+        <div>
+          <span>OCR 추출 글자 수</span>
+          <strong>{ocrLength}</strong>
+        </div>
+        <div>
+          <span>OCR 상태</span>
+          <strong>{ocrLength > 0 ? "텍스트 추출됨" : "텍스트 없음"}</strong>
+        </div>
+      </div>
+
+      <div className="ocr-box">
+        <span className="field-label">OCR 추출 텍스트</span>
+        <p>{ocrLength > 0 ? highlightedText : "백엔드 OCR 결과가 비어 있습니다."}</p>
       </div>
     </section>
   );
@@ -39,7 +56,6 @@ function buildHighlightedText(text, clauses) {
     return text;
   }
 
-  // 긴 문장 안에서 독소 조항만 잘라 mark 태그로 감싼다.
   const escapedClauses = clauses.map(escapeRegExp);
   const pattern = new RegExp(`(${escapedClauses.join("|")})`, "g");
 

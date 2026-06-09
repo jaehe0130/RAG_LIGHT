@@ -96,6 +96,11 @@ button:disabled {
   background: #d8eff2;
 }
 
+.status-pill.api {
+  color: #234f2d;
+  background: #dff3e2;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
@@ -428,7 +433,13 @@ button:disabled {
 
 .analysis-grid {
   display: grid;
-  grid-template-columns: minmax(240px, 0.86fr) minmax(0, 1.14fr);
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.result-stack {
+  display: grid;
   gap: 18px;
 }
 
@@ -541,6 +552,32 @@ button:disabled {
   line-height: 1.6;
 }
 
+.ocr-quality {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.ocr-quality div {
+  border: 1px solid #dfe6ec;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.ocr-quality span {
+  display: block;
+  color: #526170;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.ocr-quality strong {
+  display: block;
+  margin-top: 6px;
+}
+
 .ocr-box {
   margin-top: 16px;
   border: 1px solid #dde4ec;
@@ -568,7 +605,8 @@ button:disabled {
   margin-top: 16px;
 }
 
-.clause-list ul {
+.clause-list ul,
+.warning-phrases ul {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -577,13 +615,49 @@ button:disabled {
   list-style: none;
 }
 
-.clause-list li {
+.clause-list li,
+.warning-phrases li {
   border: 1px solid #f2b6a0;
   border-radius: 999px;
   padding: 0.45rem 0.7rem;
   color: #8f1d1d;
   background: #fff3ef;
   font-weight: 900;
+}
+
+.warning-phrases {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  border: 1px solid #f2b6a0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff8f4;
+}
+
+.empty-note,
+.industry-note {
+  margin: 0;
+  color: #526170;
+  font-weight: 800;
+}
+
+.industry-note {
+  margin-top: 14px;
+}
+
+.error-panel {
+  border-color: #f2b6a0;
+}
+
+.error-panel h2 {
+  margin: 0 0 8px;
+}
+
+.error-panel p:last-child {
+  margin-bottom: 0;
+  color: #8f1d1d;
+  font-weight: 800;
 }
 
 .stat-grid {
@@ -619,12 +693,12 @@ button:disabled {
 }
 
 .report-panel {
-  grid-column: 1 / -1;
+  min-height: 0;
 }
 
 .report-panel textarea {
   width: 100%;
-  min-height: 210px;
+  min-height: 180px;
   resize: vertical;
   border: 1px solid #cbd5df;
   border-radius: 6px;
@@ -691,7 +765,8 @@ button:disabled {
   }
 
   .upload-meta,
-  .segmented-control {
+  .segmented-control,
+  .ocr-quality {
     grid-template-columns: 1fr;
   }
 

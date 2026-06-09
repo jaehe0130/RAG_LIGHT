@@ -7,7 +7,8 @@ const LIGHTS = [
 ];
 
 function TrafficLight({ signal }) {
-  const activeLight = LIGHTS.find((light) => light.key === signal);
+  const normalizedSignal = signal || "YELLOW";
+  const activeLight = LIGHTS.find((light) => light.key === normalizedSignal);
 
   return (
     <section className="result-panel traffic-panel" aria-label="신호등 판정">
@@ -16,12 +17,12 @@ function TrafficLight({ signal }) {
           <p className="eyebrow">Signal</p>
           <h2>현재 판정</h2>
         </div>
-        <span className={`signal-badge ${signal.toLowerCase()}`}>{signal}</span>
+        <span className={`signal-badge ${normalizedSignal.toLowerCase()}`}>{normalizedSignal}</span>
       </div>
 
       <div className="traffic-card-list">
         {LIGHTS.map((light) => {
-          const isActive = signal === light.key;
+          const isActive = normalizedSignal === light.key;
 
           return (
             <article
@@ -40,7 +41,7 @@ function TrafficLight({ signal }) {
       </div>
 
       <p className="signal-summary">
-        현재 문서는 <strong>{activeLight?.label}</strong> 단계로 분류되었습니다.
+        현재 문서는 <strong>{activeLight?.label || "주의"}</strong> 단계로 분류되었습니다.
       </p>
     </section>
   );

@@ -2,7 +2,7 @@ import React from "react";
 
 function TrendWidget({ statistics }) {
   return (
-    <section className="result-panel trend-panel" aria-label="유사 피해 통계">
+    <section className="result-panel trend-panel" aria-label="유사 사례 통계">
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Trend</p>
@@ -22,6 +22,8 @@ function TrendWidget({ statistics }) {
           <small>동일 유형 기준</small>
         </article>
       </div>
+
+      {statistics.industry && <p className="industry-note">분야: {statistics.industry}</p>}
     </section>
   );
 }

@@ -32,7 +32,7 @@ function ReportForm({ reportText }) {
           <p className="eyebrow">Report</p>
           <h2>신고서 초안</h2>
         </div>
-        <span className="danger-chip">RED 판정 전용</span>
+        <span className="danger-chip">문서 초안</span>
       </div>
 
       <textarea readOnly value={reportText} aria-label="신고서 초안 내용" />
