@@ -35,9 +35,18 @@ def report_generation_node(state: AgentState) -> AgentState:
         
     return {"report_draft": draft}
 
+# ocr.py의 인터페이스(image_path, doc_type) 불일치를 해결하기 위한 래퍼 노드
+def ocr_node_wrapper(state: AgentState) -> dict:
+    state_for_ocr = dict(state)
+    state_for_ocr["image_path"] = state["file_path"]
+    state_for_ocr["doc_type"] = state["input_type"]
+    
+    result = run_ocr_node(state_for_ocr)
+    return {"raw_text": result.get("raw_text", "")}
+
 # LangGraph 멀티에이전트 파이프라인 조립
 workflow = StateGraph(AgentState)
-workflow.add_node("ocr", run_ocr_node)
+workflow.add_node("ocr", ocr_node_wrapper)
 workflow.add_node("rag", search_rag_node)
 workflow.add_node("validate", validate_rules_node)
 workflow.add_node("report", report_generation_node)
