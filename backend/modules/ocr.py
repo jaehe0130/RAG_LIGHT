@@ -366,48 +366,12 @@ def _preprocess_image_variants(image: np.ndarray, warnings: List[str]) -> List[T
 
     variants = [
         (
-            "resized_color",
-            enlarged_color,
-            {
-                **base_metadata,
-                "variant": "resized_color",
-                "threshold": "none",
-            },
-        ),
-        (
-            "resized_gray",
-            enlarged,
-            {
-                **base_metadata,
-                "variant": "resized_gray",
-                "threshold": "none",
-            },
-        ),
-        (
             "enhanced_gray",
             sharpened,
             {
                 **base_metadata,
                 "variant": "enhanced_gray",
                 "threshold": "none",
-            },
-        ),
-        (
-            "adaptive_binary",
-            adaptive,
-            {
-                **base_metadata,
-                "variant": "adaptive_binary",
-                "threshold": "adaptive_gaussian_block35_c7",
-            },
-        ),
-        (
-            "otsu_binary",
-            otsu,
-            {
-                **base_metadata,
-                "variant": "otsu_binary",
-                "threshold": "otsu",
             },
         ),
     ]
@@ -650,25 +614,13 @@ def _read_easyocr_items(image: np.ndarray, warnings: List[str]) -> List[Dict[str
         reader = get_easyocr_reader()
         read_configs = [
             {
-                "decoder": "beamsearch",
-                "beamWidth": 5,
-                "paragraph": False,
-                "contrast_ths": 0.05,
-                "adjust_contrast": 0.7,
-                "text_threshold": 0.55,
-                "low_text": 0.3,
-                "link_threshold": 0.4,
-                "canvas_size": 2560,
-                "mag_ratio": 1.2,
-            },
-            {
                 "decoder": "greedy",
                 "paragraph": False,
                 "text_threshold": 0.35,
                 "low_text": 0.2,
                 "link_threshold": 0.3,
-                "canvas_size": 3200,
-                "mag_ratio": 1.6,
+                "canvas_size": 2560,
+                "mag_ratio": 1.4,
             },
         ]
 

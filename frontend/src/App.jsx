@@ -5,7 +5,7 @@ import TrafficLight from "./components/TrafficLight.jsx";
 import TrendWidget from "./components/TrendWidget.jsx";
 import UploadSection from "./components/UploadSection.jsx";
 
-const API_URL = "http://localhost:8000/api/analyze";
+const API_URL = "http://127.0.0.1:8000/api/analyze";
 
 const ANALYSIS_STEPS = [
   "OCR로 문서를 읽는 중입니다",
@@ -118,19 +118,19 @@ function mapApiResultToViewModel(apiResult, files, docType) {
   const analysis = apiResult.analysis || {};
   const statistics = apiResult.statistics || {};
   const reportForm = apiResult.report_form || {};
-  const toxicClauses = normalizeClauses(analysis.toxic_clauses || []);
 
   return {
     signal: analysis.signal_color || "YELLOW",
     summary: analysis.main_warning || "백엔드 분석 결과가 도착했습니다.",
     ocr_text: apiResult.ocr_text || "",
-    toxic_clauses: toxicClauses,
+    toxic_clauses: (analysis.toxic_clauses || []).map(c => typeof c === 'string' ? c : c.clause),
     statistics: {
       similar_case_count: statistics.similar_cases_count || statistics.similar_case_count || 0,
       dispute_rate: statistics.dispute_rate || 0,
       industry: statistics.industry || ""
     },
     report_form: reportForm.content || "신고서 초안 내용이 없습니다.",
+    reference_cases: apiResult.reference_cases || [],
     metadata: {
       file_names: files.map((file) => file.name),
       analyzed_file_name: files[0]?.name || "",

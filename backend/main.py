@@ -85,6 +85,8 @@ async def analyze_contract(
     
     # 3. 기획서의 핵심 산출 지표인 '3색 신호등 결과'와 '유사 피해 통계'를 통합하여 반환
     industry = "민생 밀접 분야(체육시설/요가원 등)" if final_output["input_type"] == "CONTRACT" else "디지털 유통 및 전자상거래"
+    reference_docs = final_output.get("retrieved_ftc_docs", []) + final_output.get("retrieved_kca_docs", [])
+    
     return {
         "status": "success",
         "input_type": final_output["input_type"],
@@ -97,10 +99,11 @@ async def analyze_contract(
         "statistics": {
             "industry": industry,
             "dispute_rate": 24.6 if final_output["input_type"] == "CONTRACT" else 8.8, # 기획서 기반 실제 통계 하드코딩맵핑
-            "similar_cases_count": 123 if final_output["input_type"] == "CONTRACT" else 44
+            "similar_cases_count": len(reference_docs) if reference_docs else (123 if final_output["input_type"] == "CONTRACT" else 44)
         },
         "report_form": {
             "title": f"[자동완성] {industry} 피해 관련 구제 신청 문서 초안",
             "content": final_output["report_draft"]
-        }
+        },
+        "reference_cases": reference_docs
     }

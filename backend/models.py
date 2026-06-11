@@ -25,3 +25,4 @@ class AnalysisResponse(BaseModel):
     analysis: Dict[str, Any]      # signal_color, main_warning, toxic_clauses
     statistics: Dict[str, Any]    # React 차트 시각화용 소비자원 통계 (dispute_rate, count)
     report_form: Dict[str, Any]   # 원클릭 신고서/신청서 초안 서식 데이터
+    reference_cases: List[str]    # RAG 검색으로 찾아온 공정위/소비자원 유사 사례 문서들
