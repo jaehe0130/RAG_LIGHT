@@ -20,9 +20,6 @@ load_dotenv()
 
 RAW_DIR = Path(__file__).parent / "raw"
 QDRANT_PATH = str(Path(__file__).parent / "qdrant_storage")
-# colab
-# RAW_DIR = Path("/content/drive/MyDrive/Colab Notebooks/**개인 경로 넣기**")
-# QDRANT_PATH = "/content/qdrant_storage"
 COLLECTION_NAME = "ftc_decisions"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
 VECTOR_DIM = 1024
