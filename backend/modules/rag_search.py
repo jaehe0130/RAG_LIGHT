@@ -4,7 +4,8 @@ from sentence_transformers import SentenceTransformer
 from models import AgentState
 
 QDRANT_PATH = "data/qdrant_storage"
-COLLECTION_NAME = "ftc_decisions"
+FTC_COLLECTION = "ftc_decisions"
+KCA_COLLECTION = "kca_cases"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
 TOP_K = 5
 
@@ -14,7 +15,7 @@ _client = QdrantClient(path=QDRANT_PATH)
 
 
 def search_rag_node(state: AgentState) -> AgentState:
-    print("[Node] 공정위 의결서 Dense 검색 중...")
+    print("[Node] 공정위 및 소비자원 DB Dense 검색 중...")
 
     # 쿼리 임베딩: "query: " prefix 필수 (passage: 와 대칭)
     query_vector = _model.encode(
@@ -22,16 +23,25 @@ def search_rag_node(state: AgentState) -> AgentState:
         normalize_embeddings=True,
     ).tolist()
 
-    results = _client.query_points(
-        collection_name=COLLECTION_NAME,
+    # 1. 공정위 의결서 검색
+    ftc_results = _client.query_points(
+        collection_name=FTC_COLLECTION,
         query=query_vector,
         limit=TOP_K,
         with_payload=True,
     ).points
+    ftc_docs = [hit.payload.get("page_content", "") for hit in ftc_results if hit.payload]
 
-    ftc_docs = [hit.payload.get("page_content", "") for hit in results if hit.payload]
+    # 2. 한국소비자원 피해구제 사례 검색
+    kca_results = _client.query_points(
+        collection_name=KCA_COLLECTION,
+        query=query_vector,
+        limit=TOP_K,
+        with_payload=True,
+    ).points
+    kca_docs = [hit.payload.get("page_content", "") for hit in kca_results if hit.payload]
 
     return {
         "retrieved_ftc_docs": ftc_docs,
-        "retrieved_kca_docs": [],
+        "retrieved_kca_docs": kca_docs,
     }

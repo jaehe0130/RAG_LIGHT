@@ -43,6 +43,22 @@ function ResultSummary({ result }) {
         </div>
       </div>
 
+      <div className="reference-cases">
+        <span className="field-label">유사 피해구제 및 의결서 사례 (RAG 검색 결과)</span>
+        {result.reference_cases && result.reference_cases.length > 0 ? (
+          <div className="cases-list" style={{ maxHeight: "200px", overflowY: "auto", background: "var(--color-surface)", padding: "12px", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
+            {result.reference_cases.map((caseText, idx) => (
+              <div key={idx} style={{ marginBottom: "12px", paddingBottom: "12px", borderBottom: "1px dashed var(--color-border)" }}>
+                <strong>사례 {idx + 1}</strong>
+                <p style={{ margin: "4px 0 0 0", whiteSpace: "pre-wrap" }}>{caseText}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-note">검색된 유사 사례가 없습니다.</p>
+        )}
+      </div>
+
       <div className="ocr-box">
         <span className="field-label">OCR 추출 텍스트</span>
         <p>{ocrLength > 0 ? highlightedText : "백엔드 OCR 결과가 비어 있습니다."}</p>
