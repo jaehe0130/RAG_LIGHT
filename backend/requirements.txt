@@ -21,9 +21,11 @@ python-dotenv==1.2.2
 
 
 # -- OCR ----------------
-easyocr
 opencv-python
 numpy
 Pillow
 PyMuPDF
+google-cloud-documentai
+paddleocr
+paddlepaddle
 

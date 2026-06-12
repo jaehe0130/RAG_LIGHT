@@ -1,143 +1,222 @@
-import React, { useState } from "react";
-import ReportForm from "./components/ReportForm.jsx";
-import ResultSummary from "./components/ResultSummary.jsx";
-import TrafficLight from "./components/TrafficLight.jsx";
-import TrendWidget from "./components/TrendWidget.jsx";
-import UploadSection from "./components/UploadSection.jsx";
+import React, { useEffect, useState } from "react";
+import { analyzeDocument } from "./api/analyzeClient.js";
+import AnalysisProgress from "./components/AnalysisProgress.jsx";
+import ChatbotPanel from "./components/ChatbotPanel.jsx";
+import RiskResultCard from "./components/RiskResultCard.jsx";
+import UploadPanel from "./components/UploadPanel.jsx";
 
-const API_URL = "http://127.0.0.1:8000/api/analyze";
-
-const ANALYSIS_STEPS = [
-  "OCR로 문서를 읽는 중입니다",
-  "유사 사례를 검색 중입니다",
-  "최종 판정을 정리하는 중입니다"
-];
+const PROGRESS_STEP_COUNT = 5;
 
 function App() {
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [documentType, setDocumentType] = useState("terms");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [docType, setDocType] = useState("terms");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisStep, setAnalysisStep] = useState("");
+  const [progressIndex, setProgressIndex] = useState(0);
+  const [analysisResult, setAnalysisResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [chatQuestion, setChatQuestion] = useState("");
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
-  const handleAnalyze = async ({ files, docType }) => {
-    const nextFiles = files || [];
-    setUploadedFiles(nextFiles);
-    setDocumentType(docType);
-    setIsAnalyzing(true);
-    setAnalysisResult(null);
-    setErrorMessage("");
+  useEffect(() => {
+    if (!isAnalyzing) {
+      return undefined;
+    }
 
-    ANALYSIS_STEPS.forEach((step, index) => {
-      window.setTimeout(() => setAnalysisStep(step), index * 520);
-    });
+    const timer = window.setInterval(() => {
+      setProgressIndex((current) => Math.min(current + 1, PROGRESS_STEP_COUNT - 1));
+    }, 900);
 
-    if (nextFiles.length === 0) {
-      setIsAnalyzing(false);
-      setErrorMessage("분석할 파일을 먼저 선택해 주세요.");
+    return () => window.clearInterval(timer);
+  }, [isAnalyzing]);
+
+  const handleAnalyze = async () => {
+    if (!selectedFile || isAnalyzing) {
       return;
     }
 
+    setIsAnalyzing(true);
+    setProgressIndex(1);
+    setErrorMessage("");
+    setAnalysisResult(null);
+
     try {
-      const formData = new FormData();
-      formData.append("file", nextFiles[0]);
-      formData.append("input_type", docType);
+      const apiResult = await analyzeDocument({ file: selectedFile, docType });
+      const viewModel = mapApiResultToViewModel(apiResult, selectedFile, docType);
 
-      const response = await fetch(API_URL, {
-        method: "POST",
-        body: formData
-      });
+      setProgressIndex(PROGRESS_STEP_COUNT - 1);
+      setAnalysisResult(viewModel);
 
-      if (!response.ok) {
-        throw new Error(`API 응답 오류: ${response.status}`);
+      if (viewModel.ocr_text.trim().length > 0 && viewModel.ocr_text.trim().length < 20) {
+        setErrorMessage("문서 인식 결과가 부족합니다. 더 선명한 이미지로 다시 시도해주세요.");
       }
-
-      const apiResult = await response.json();
-      setAnalysisResult(mapApiResultToViewModel(apiResult, nextFiles, docType));
     } catch (error) {
-      console.error("분석 요청 중 오류 발생:", error);
-      setErrorMessage("백엔드 API 분석 요청에 실패했습니다. 서버 실행 상태와 업로드 파일을 확인해 주세요.");
+      console.error("문서 분석 실패:", error);
+      setErrorMessage("문서 분석에 실패했습니다. 파일 형식과 백엔드 서버 실행 상태를 확인해주세요.");
     } finally {
       setIsAnalyzing(false);
-      setAnalysisStep("");
     }
+  };
+
+  const askChatbot = (question) => {
+    setChatQuestion(question);
+    setIsChatOpen(true);
   };
 
   return (
     <div className="app-shell">
-      <header className="app-header">
+      <header className="hero-header">
         <div>
-          <p className="eyebrow">Team B Frontend</p>
-          <h1>불공정 약관 · 광고 OCR 판정</h1>
+          <p className="eyebrow">공정거래 문서 분석</p>
+          <h1>소비자에게 불리할 수 있는 문구를 쉽게 확인하세요</h1>
+          <p>
+            약관, 광고 캡처, 계약서 문서를 올리면 위험 문구를 찾고 쉬운 설명과 다음 행동을 안내합니다.
+          </p>
         </div>
-        <div className="status-pill api">API Mode</div>
       </header>
 
-      <main className="workspace">
-        <UploadSection
-          documentType={documentType}
-          uploadedFiles={uploadedFiles}
-          isAnalyzing={isAnalyzing}
-          analysisStep={analysisStep}
-          onAnalyze={handleAnalyze}
-        />
+      <main className="app-layout">
+        <div className="main-column">
+          <section className="top-grid">
+            <UploadPanel
+              selectedFile={selectedFile}
+              docType={docType}
+              isAnalyzing={isAnalyzing}
+              errorMessage={errorMessage}
+              onFileChange={(file) => {
+                setSelectedFile(file);
+                setProgressIndex(file ? 1 : 0);
+                setErrorMessage("");
+              }}
+              onDocTypeChange={setDocType}
+              onAnalyze={handleAnalyze}
+            />
 
-        {isAnalyzing && (
-          <section className="analysis-loading" aria-live="polite">
-            <div className="loading-spinner" />
-            <strong>{analysisStep || ANALYSIS_STEPS[0]}</strong>
-            <span>백엔드 OCR API 응답을 기다리고 있습니다.</span>
+            <AnalysisProgress currentStepIndex={progressIndex} isAnalyzing={isAnalyzing} hasFile={Boolean(selectedFile)} />
           </section>
-        )}
 
-        {errorMessage && !isAnalyzing && (
-          <section className="result-panel error-panel" aria-live="polite">
-            <p className="eyebrow">Error</p>
-            <h2>분석 실패</h2>
-            <p>{errorMessage}</p>
-          </section>
-        )}
+          {analysisResult ? (
+            <section className="results-area" aria-label="분석 결과">
+              <RiskResultCard result={analysisResult} onAskQuestion={askChatbot} />
+              <ResultDetails result={analysisResult} />
+            </section>
+          ) : (
+            <section className="empty-result-panel">
+              <h2>분석 결과가 여기에 표시됩니다</h2>
+              <p>문서를 업로드하고 “문서 분석하기”를 누르면 신호등 결과와 쉬운 설명을 확인할 수 있습니다.</p>
+            </section>
+          )}
+        </div>
 
-        {analysisResult && !isAnalyzing && (
-          <section className="analysis-grid" aria-label="분석 결과">
-            <div className="result-stack">
-              <TrafficLight signal={analysisResult.signal} />
-              <TrendWidget statistics={analysisResult.statistics} />
-              <ReportForm reportText={analysisResult.report_form} />
-            </div>
-            <ResultSummary result={analysisResult} />
-          </section>
-        )}
+        <aside className="chat-side">
+          <ChatbotPanel analysisResult={analysisResult} externalQuestion={chatQuestion} onExternalQuestionHandled={() => setChatQuestion("")} />
+        </aside>
       </main>
+
+      <button type="button" className="chat-fab" onClick={() => setIsChatOpen(true)}>
+        상담 도우미
+      </button>
+
+      {isChatOpen && (
+        <div className="chat-modal-backdrop" role="dialog" aria-modal="true" aria-label="소비자 상담 도우미">
+          <ChatbotPanel
+            analysisResult={analysisResult}
+            externalQuestion={chatQuestion}
+            onExternalQuestionHandled={() => setChatQuestion("")}
+            variant="modal"
+            onClose={() => setIsChatOpen(false)}
+          />
+        </div>
+      )}
+
+      <footer className="service-disclaimer">
+        이 서비스는 소비자에게 불리할 수 있는 문구를 쉽게 확인하기 위한 참고용 도구입니다. 최종 판단이나 법적 조치는
+        관련 기관 상담을 통해 확인해주세요.
+      </footer>
     </div>
   );
 }
 
-function mapApiResultToViewModel(apiResult, files, docType) {
+function ResultDetails({ result }) {
+  return (
+    <section className="result-details">
+      <div className="detail-card">
+        <h2>관련 사례 기반 설명</h2>
+        {result.reference_cases.length > 0 ? (
+          <ul className="case-list">
+            {result.reference_cases.slice(0, 3).map((caseText, index) => (
+              <li key={`${index}-${caseText.slice(0, 24)}`}>{caseText}</li>
+            ))}
+          </ul>
+        ) : (
+          <p>아직 표시할 관련 사례가 없습니다.</p>
+        )}
+      </div>
+
+      <div className="detail-card">
+        <h2>추출된 문구</h2>
+        <p className="extracted-text">{result.ocr_text || "추출된 문구가 없습니다."}</p>
+      </div>
+
+      <details className="technical-details">
+        <summary>상세 보기</summary>
+        <dl>
+          <div>
+            <dt>분석 상태</dt>
+            <dd>{result.status || "확인됨"}</dd>
+          </div>
+          <div>
+            <dt>문서 종류</dt>
+            <dd>{result.docTypeLabel}</dd>
+          </div>
+          <div>
+            <dt>인식 품질 참고</dt>
+            <dd>{result.ocr_text.length > 20 ? "분석 가능한 문구가 추출되었습니다." : "문구가 짧아 재촬영이 필요할 수 있습니다."}</dd>
+          </div>
+        </dl>
+      </details>
+    </section>
+  );
+}
+
+function mapApiResultToViewModel(apiResult, file, docType) {
   const analysis = apiResult.analysis || {};
-  const statistics = apiResult.statistics || {};
-  const reportForm = apiResult.report_form || {};
+  const signal = normalizeSignal(analysis.signal_color);
+  const clauses = normalizeClauses(analysis.toxic_clauses || []);
 
   return {
-    signal: analysis.signal_color || "YELLOW",
-    summary: analysis.main_warning || "백엔드 분석 결과가 도착했습니다.",
+    signal,
+    riskLabel: signalToLabel(signal),
+    summary: analysis.main_warning || "분석 결과 설명이 아직 없습니다.",
     ocr_text: apiResult.ocr_text || "",
-    toxic_clauses: (analysis.toxic_clauses || []).map(c => typeof c === 'string' ? c : c.clause),
-    statistics: {
-      similar_case_count: statistics.similar_cases_count || statistics.similar_case_count || 0,
-      dispute_rate: statistics.dispute_rate || 0,
-      industry: statistics.industry || ""
-    },
-    report_form: reportForm.content || "신고서 초안 내용이 없습니다.",
+    toxic_clauses: clauses,
+    report_form: apiResult.report_form?.content || "",
     reference_cases: apiResult.reference_cases || [],
-    metadata: {
-      file_names: files.map((file) => file.name),
-      analyzed_file_name: files[0]?.name || "",
-      doc_type: docType,
-      status: apiResult.status || ""
-    }
+    status: apiResult.status || "",
+    fileName: file?.name || "",
+    docType,
+    docTypeLabel: docType === "terms" ? "약관·계약서" : "광고·캡처",
   };
+}
+
+function normalizeSignal(signal) {
+  const upperSignal = String(signal || "").toUpperCase();
+  if (upperSignal === "GREEN" || upperSignal === "SAFE") {
+    return "GREEN";
+  }
+  if (upperSignal === "RED" || upperSignal === "DANGER") {
+    return "RED";
+  }
+  return "YELLOW";
+}
+
+function signalToLabel(signal) {
+  if (signal === "GREEN") {
+    return "안전";
+  }
+  if (signal === "RED") {
+    return "위험";
+  }
+  return "주의";
 }
 
 function normalizeClauses(clauses) {
@@ -146,8 +225,7 @@ function normalizeClauses(clauses) {
       if (typeof clause === "string") {
         return clause;
       }
-
-      return clause?.text || clause?.clause || clause?.content || JSON.stringify(clause);
+      return clause?.text || clause?.clause || clause?.content || "";
     })
     .filter(Boolean);
 }
