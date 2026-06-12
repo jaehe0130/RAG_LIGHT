@@ -8,22 +8,38 @@ from dotenv import load_dotenv
 # .env 파일 로드
 load_dotenv()
 
+def parse_korean_number_to_int(val: str) -> int:
+    val = val.strip().replace(",", "")
+    if val.isdigit():
+        return int(val)
+    try:
+        return int(float(val))
+    except ValueError:
+        pass
+    
+    ko_nums = {
+        "일": 1, "이": 2, "삼": 3, "사": 4, "오": 5, "육": 6, "칠": 7, "팔": 8, "구": 9,
+        "십": 10, "이십": 20, "삼십": 30, "사십": 40, "오십": 50, "육십": 60, "칠십": 70, "팔십": 80, "구십": 90, "백": 100,
+        "십오": 15, "이십오": 25, "삼십오": 35, "사십오": 45, "오십오": 55
+    }
+    return ko_nums.get(val, 0)
+
 def extract_penalty_percentages(text: str) -> list:
     """
     텍스트에서 위약금/수수료 관련 퍼센트(%) 수치를 정규표현식으로 추출합니다.
     """
+    num_pattern = r'(\d+|이십오|삼십오|사십오|오십오|십오|이십|삼십|사십|오십|육십|칠십|팔십|구십|일|이|삼|사|오|육|칠|팔|구|십|백)'
     patterns = [
-        r'(?:위약금|수수료|공제|취소\s*수수료|환불\s*수수료|위약)\s*(?:은|는)?\s*(?:총\s*결제\s*금액의\s*)?(\d+)\s*(?:%|퍼센트)',
-        r'(?:취소|환불|반환)\s*시\s*(?:총\s*금액의\s*)?(\d+)\s*(?:%|퍼센트)\s*(?:공제|부과)'
+        r'(?:위약금|수수료|공제|취소\s*수수료|환불\s*수수료|위약)\s*(?:은|는)?\s*(?:총\s*결제\s*금액의\s*)?' + num_pattern + r'\s*(?:%|퍼센트)',
+        r'(?:취소|환불|반환)\s*시\s*(?:총\s*금액의\s*)?' + num_pattern + r'\s*(?:%|퍼센트)\s*(?:공제|부과)'
     ]
     percentages = []
     for pattern in patterns:
         matches = re.findall(pattern, text)
         for match in matches:
-            try:
-                percentages.append(int(match))
-            except ValueError:
-                continue
+            val = parse_korean_number_to_int(match)
+            if val > 0:
+                percentages.append(val)
     return percentages
 
 def extract_krw_amount(text: str) -> list:
@@ -31,31 +47,86 @@ def extract_krw_amount(text: str) -> list:
     텍스트에서 양도 수수료 등 원 단위 금액을 정규표현식으로 추출합니다.
     (예: 50,000원 -> 50000, 30000원 -> 30000)
     """
-    pattern = r'(?:양도\s*수수료|양도비|양도\s*비용|변경\s*수수료|변경비)\s*(?:은|는)?\s*(\d{1,3}(?:,\d{3})*|\d+)\s*원'
+    pattern = r'(?:양도\s*수수료|양도비|양도\s*비용|변경\s*수수료|변경비)\s*(?:은|는)?\s*(\d{1,3}(?:,\d{3})*|\d+(?:\.\d+)?|일만|이만|삼만|사만|오만|육만|칠만|팔만|구만|십만|이십|삼십|사십|오십|십|일|이|삼|사|오|육|칠|팔|구)\s*(만)?\s*원'
     matches = re.findall(pattern, text)
     amounts = []
-    for m in matches:
-        clean_m = m.replace(",", "")
-        try:
-            amounts.append(int(clean_m))
-        except ValueError:
-            continue
+    
+    ko_map = {
+        "일": 1, "이": 2, "삼": 3, "사": 4, "오": 5, "육": 6, "칠": 7, "팔": 8, "구": 9,
+        "십": 10, "이십": 20, "삼십": 30, "사십": 40, "오십": 50,
+        "일만": 10000, "이만": 20000, "삼만": 30000, "사만": 40000, "오만": 50000,
+        "육만": 60000, "칠만": 70000, "팔만": 80000, "구만": 90000, "십만": 100000
+    }
+    
+    for m, man in matches:
+        amount_str = m.strip().replace(",", "")
+        has_man = bool(man)
+        val = 0
+        if amount_str in ko_map:
+            val = ko_map[amount_str]
+            if val < 10000 and has_man:
+                val *= 10000
+        else:
+            try:
+                val = int(float(amount_str))
+                if has_man or val < 100:
+                    if val < 1000:
+                        val *= 10000
+            except ValueError:
+                continue
+        if val > 0:
+            amounts.append(val)
     return amounts
 
 def extract_refund_days(text: str) -> list:
     """
     텍스트에서 환불/청약철회 가능 일수(일)를 정규표현식으로 추출합니다.
     """
-    pattern_days = r'(?:환불|취소|청약\s*철회|청약철회|반품)\s*(?:가능\s*)?(?:기한|기간)?\s*(\d+)\s*(?:일|하루)'
-    pattern_after = r'(?:배송|구매|결제|인도)\s*(?:후|완료\s*후)\s*(\d+)\s*(?:일\s*이내|일\s*동안|일\s*안에)'
+    pattern_days = r'(?:환불|취소|청약\s*철회|청약철회|반품)\s*(?:가능\s*)?(?:기한|기간)?\s*(\d+주일|\d+주|일주일|이주일|1주일|2주일|주일|이틀|하루|일일|십사일|삼일|오일|육일|칠일|팔일|구일|십일|일|이|삼|사|오|육|칠|팔|구|십|이주|2주|주|\d+)\s*(?:일|하루|주일|주)?'
+    pattern_after = r'(?:배송|구매|결제|인도)\s*(?:후|완료\s*후)\s*(\d+주일|\d+주|일주일|이주일|1주일|2주일|주일|이틀|하루|일일|십사일|삼일|오일|육일|칠일|팔일|구일|십일|일|이|삼|사|오|육|칠|팔|구|십|이주|2주|주|\d+)\s*(?:일|주일|주|하루)?\s*(?:이내|동안|안에)'
     days = []
+    
+    def parse_days(days_str: str) -> int:
+        days_str = days_str.strip()
+        if days_str.endswith("주일") and days_str[:-2].isdigit():
+            return int(days_str[:-2]) * 7
+        if days_str.endswith("주") and days_str[:-1].isdigit():
+            return int(days_str[:-1]) * 7
+            
+        if days_str in ["일주일", "1주일", "1주", "주일", "7일", "칠일", "칠", "주"]:
+            return 7
+        if days_str in ["이주일", "2주", "2주일", "14일", "십사일", "이주"]:
+            return 14
+        if days_str in ["하루", "일일", "1일", "일"]:
+            return 1
+        if days_str in ["이틀", "2일", "이일", "이"]:
+            return 2
+        if days_str in ["사흘", "3일", "삼일", "삼"]:
+            return 3
+        if days_str in ["나흘", "4일", "사일", "사"]:
+            return 4
+        if days_str in ["5일", "오일", "오"]:
+            return 5
+        if days_str in ["6일", "육일", "육"]:
+            return 6
+        if days_str in ["8일", "팔일", "팔"]:
+            return 8
+        if days_str in ["9일", "구일", "구"]:
+            return 9
+        if days_str in ["10일", "십일", "십"]:
+            return 10
+            
+        try:
+            return int(days_str)
+        except ValueError:
+            return 0
+
     for pat in [pattern_days, pattern_after]:
         matches = re.findall(pat, text)
         for m in matches:
-            try:
-                days.append(int(m))
-            except ValueError:
-                continue
+            val = parse_days(m)
+            if val > 0:
+                days.append(val)
     return days
 
 def call_openai_api(api_key: str, prompt: str) -> dict:
@@ -234,7 +305,22 @@ def validate_rules_node(state: dict) -> dict:
                 "reason": "표시광고법 제3조에 의거하여 의학적/객관적 근거 없이 안전성을 100% 단정 짓는 기만적 과장 광고 행위(RED)에 해당합니다."
             })
 
-    # 3-5. 강제 보정 적용
+    # 3-5. AD_FOMO (쇼핑몰 마감 임박 광고 - 다크패턴) 정밀 검증
+    elif doc_type == "AD_FOMO":
+        # 기준 A: 선착순, 마감 임박, 카운트다운 타이머 조작 등 압박용 다크패턴 표현
+        fomo_keywords = [
+            "오늘 단 하루", "오늘만 이 가격", "마지막 기회", "마감 임박", "선착순 10명", 
+            "선착순 5명", "남은 수량 1개", "실시간 구매", "카운트다운", "마감 직전",
+            "오늘만 이 혜택", "선착순 마감"
+        ]
+        detected_words = [w for w in fomo_keywords if w in raw_text]
+        if detected_words:
+            override_reasons.append({
+                "clause": f"마감 압박 및 선착순 기만 표현 감지 ({', '.join(detected_words)})",
+                "reason": "전자상거래법 제21조 제1항 제1호(기만적 방법을 사용하여 소비자를 유인) 및 표시광고법 제3조에 의거하여, 합리적인 근거 없이 소비자의 불안이나 충동구매를 유도하는 마감 임박 및 선착순 기만 광고 조항(RED)에 해당합니다."
+            })
+
+    # 3-6. 강제 보정 적용
     if override_reasons:
         print(f"[Rule_Validator] 정량 기준 위반 검출. 최종 신호등을 RED로 강제 교정합니다. (검출 건수: {len(override_reasons)})")
         result["signal_color"] = "RED"
