@@ -120,8 +120,7 @@ async def analyze_contract(
         "file_path": file_path,
         "input_type": backend_input_type,
         "raw_text": "",
-        "retrieved_ftc_docs": [],
-        "retrieved_kca_docs": [],
+        "retrieved_docs": [],
         "llm_analysis": "",
         "toxic_clauses": [],
         "signal_color": "",
@@ -130,7 +129,7 @@ async def analyze_contract(
     final_output = compiled_graph.invoke(initial_state)
 
     industry = "민생 밀접 분야(체육시설/요가원 등)" if final_output["input_type"] == "CONTRACT" else "디지털 유통 및 전자상거래"
-    reference_docs = final_output.get("retrieved_ftc_docs", []) + final_output.get("retrieved_kca_docs", [])
+    reference_docs = final_output.get("retrieved_docs", [])
 
     return {
         "status": "success",
