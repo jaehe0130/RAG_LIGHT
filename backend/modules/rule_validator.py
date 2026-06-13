@@ -136,7 +136,7 @@ def call_openai_api(api_key: str, prompt: str) -> dict:
     """
     if api_key.startswith("AIzaSy"):
         url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-        model_name = "gemini-3.5-flash"
+        model_name = "gemini-3.1-flash-lite"
     else:
         url = "https://api.openai.com/v1/chat/completions"
         model_name = "gpt-4o-mini"
@@ -226,14 +226,16 @@ def validate_rules_node(state: dict) -> dict:
         # 1차 카테고리 로컬 분류
         classified_type = "OTHER"
         lower_text = raw_text.lower()
-        if any(w in lower_text for w in ["헬스", "요가", "필라테스", "체육", "회원권"]):
-            classified_type = "SPORTS"
-        elif any(w in lower_text for w in ["쇼핑몰", "배송", "상품", "구매", "결제", "인강"]):
-            classified_type = "ECOMMERCE"
-        elif any(w in lower_text for w in ["다이어트", "부작용", "효능", "보조제", "화장품"]):
-            classified_type = "AD_DIET"
-        elif any(w in lower_text for w in ["마감", "선착순", "오늘만", "타이머"]):
-            classified_type = "AD_FOMO"
+        if input_type == "CONTRACT":
+            if any(w in lower_text for w in ["헬스", "요가", "필라테스", "체육", "회원권"]):
+                classified_type = "SPORTS"
+            elif any(w in lower_text for w in ["쇼핑몰", "배송", "상품", "구매", "결제", "인강"]):
+                classified_type = "ECOMMERCE"
+        else: # AD
+            if any(w in lower_text for w in ["다이어트", "부작용", "효능", "보조제", "화장품"]):
+                classified_type = "AD_DIET"
+            elif any(w in lower_text for w in ["마감", "선착순", "오늘만", "타이머"]):
+                classified_type = "AD_FOMO"
             
         signal_color = "GREEN"
         llm_analysis = "약관/광고 내용에서 명백한 법적 위반 조항이 검출되지 않았습니다."
@@ -245,6 +247,18 @@ def validate_rules_node(state: dict) -> dict:
             "toxic_clauses": toxic_clauses,
             "signal_color": signal_color
         }
+
+    # 2-1. 결과 데이터 구조 정규화 및 방어적 초기화 (Defensive schema check)
+    if not isinstance(result, dict):
+        result = {}
+    if "classified_type" not in result:
+        result["classified_type"] = "OTHER"
+    if "llm_analysis" not in result or not isinstance(result["llm_analysis"], str):
+        result["llm_analysis"] = str(result.get("llm_analysis", ""))
+    if "toxic_clauses" not in result or not isinstance(result["toxic_clauses"], list):
+        result["toxic_clauses"] = []
+    if "signal_color" not in result or not isinstance(result["signal_color"], str):
+        result["signal_color"] = "GREEN"
 
     # 3. [교차 검증 및 강제 보정] 명확한 정량적 기준에 맞춰 RED로 강제 교정 (Override)
     doc_type = result.get("classified_type", "OTHER")
@@ -327,12 +341,19 @@ def validate_rules_node(state: dict) -> dict:
         
         # 독소 조항 목록에 중복되지 않게 검증 위반 조항 병합
         for reason_item in override_reasons:
-            if not any(c["clause"] == reason_item["clause"] for c in result["toxic_clauses"]):
+            exists = False
+            for c in result["toxic_clauses"]:
+                if isinstance(c, dict) and c.get("clause") == reason_item["clause"]:
+                    exists = True
+                    break
+            if not exists:
                 result["toxic_clauses"].append(reason_item)
                 
-        # 요약 설명 강제 보강
-        warning_prefix = "[정량 검증 위반 발견] 해당 문서에서 명백한 법적 위반 기준이 감지되어 강제 RED 판정되었습니다. "
-        if warning_prefix not in result["llm_analysis"]:
-            result["llm_analysis"] = warning_prefix + result["llm_analysis"]
+        # 요약 설명 강제 보강 (문맥 모순 방지를 위해 기존 의견을 덮어쓰고 위반 항목 리스트업)
+        reasons_summary = ", ".join([f"'{r['clause']}'" for r in override_reasons])
+        result["llm_analysis"] = (
+            f"[정량 검증 위반 발견] 본 문서에서 명백한 법률 위반 기준({reasons_summary})이 감지되어 강제 RED 판정되었습니다. "
+            f"자세한 위법성 여부는 아래에 탐지된 독소 조항과 상세 법적 근거를 확인해 주세요."
+        )
 
     return result
