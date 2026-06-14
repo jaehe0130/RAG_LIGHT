@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import { sendChatMessage } from "../api/chatClient.js";
 import SuggestedQuestionChips from "./SuggestedQuestionChips.jsx";
 
@@ -27,7 +27,17 @@ function ChatbotPanel({ analysisResult, externalQuestion, onExternalQuestionHand
     [analysisResult],
   );
 
-  React.useEffect(() => {
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  useEffect(() => {
     if (externalQuestion) {
       handleAsk(externalQuestion);
       onExternalQuestionHandled?.();
@@ -80,6 +90,7 @@ function ChatbotPanel({ analysisResult, externalQuestion, onExternalQuestionHand
             <p>답변을 정리하는 중입니다...</p>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       <SuggestedQuestionChips questions={suggestedQuestions} onSelect={handleAsk} disabled={isLoading} />

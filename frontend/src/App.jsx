@@ -67,7 +67,7 @@ function App() {
       <header className="hero-header">
         <div>
           <p className="eyebrow">공정거래 문서 분석</p>
-          <h1>소비자에게 불리할 수 있는 문구를 쉽게 확인하세요</h1>
+          <h1>RAG Light</h1>
           <p>
             약관, 광고 캡처, 계약서 문서를 올리면 위험 문구를 찾고 쉬운 설명과 다음 행동을 안내합니다.
           </p>
@@ -151,29 +151,6 @@ function ResultDetails({ result }) {
           <p>아직 표시할 관련 사례가 없습니다.</p>
         )}
       </div>
-
-      <div className="detail-card">
-        <h2>추출된 문구</h2>
-        <p className="extracted-text">{result.ocr_text || "추출된 문구가 없습니다."}</p>
-      </div>
-
-      <details className="technical-details">
-        <summary>상세 보기</summary>
-        <dl>
-          <div>
-            <dt>분석 상태</dt>
-            <dd>{result.status || "확인됨"}</dd>
-          </div>
-          <div>
-            <dt>문서 종류</dt>
-            <dd>{result.docTypeLabel}</dd>
-          </div>
-          <div>
-            <dt>인식 품질 참고</dt>
-            <dd>{result.ocr_text.length > 20 ? "분석 가능한 문구가 추출되었습니다." : "문구가 짧아 재촬영이 필요할 수 있습니다."}</dd>
-          </div>
-        </dl>
-      </details>
     </section>
   );
 }
