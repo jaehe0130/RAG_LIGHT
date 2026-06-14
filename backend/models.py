@@ -25,3 +25,17 @@ class AnalysisResponse(BaseModel):
     statistics: Dict[str, Any]    # React 차트 시각화용 소비자원 통계 (dispute_rate, count)
     report_form: Dict[str, Any]   # 원클릭 신고서/신청서 초안 서식 데이터
     reference_cases: List[str]    # RAG 검색으로 찾아온 공정위/소비자원 유사 사례 문서들
+
+# 3. 챗봇 통신을 위한 요청/응답 포맷
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    query: str
+    history: List[ChatMessage] = []
+    context: str = ""
+
+class ChatResponse(BaseModel):
+    response: str
+

@@ -7,10 +7,11 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.graph import END, StateGraph
 
-from models import AgentState, AnalysisResponse
+from models import AgentState, AnalysisResponse, ChatRequest, ChatResponse
 from modules.ocr import extract_text, is_supported_upload, run_ocr_node
 from modules.rag_search import search_rag_node
 from modules.rule_validator import validate_rules_node
+from modules.chat_agent import generate_chat_response
 
 
 app = FastAPI(title="찰칵! 소비자 공정 Guard 통합 API")
@@ -151,3 +152,22 @@ async def analyze_contract(
         },
         "reference_cases": reference_docs,
     }
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_endpoint(req: ChatRequest):
+    """
+    문서분석도우미 챗봇 API
+    프론트엔드에서 보낸 쿼리와 이전 대화 기록을 받아 응답을 반환합니다.
+    """
+    # Pydantic 모델(ChatMessage) 리스트를 딕셔너리 리스트로 변환
+    history_dicts = [{"role": msg.role, "content": msg.content} for msg in req.history]
+    
+    # 챗봇 두뇌(chat_agent) 호출
+    answer = generate_chat_response(
+        query=req.query, 
+        chat_history=history_dicts, 
+        retrieved_context=req.context
+    )
+    
+    return ChatResponse(response=answer)
+

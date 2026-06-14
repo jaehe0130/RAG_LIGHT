@@ -1,7 +1,7 @@
-const CHAT_API_URL = "http://127.0.0.1:8000/chat";
+const CHAT_API_URL = "http://127.0.0.1:8000/api/chat";
 
-export async function sendChatMessage(question, analysisResult) {
-  const payload = buildChatPayload(question, analysisResult);
+export async function sendChatMessage(question, history, analysisResult) {
+  const payload = buildChatPayload(question, history, analysisResult);
 
   try {
     const response = await fetch(CHAT_API_URL, {
@@ -17,25 +17,37 @@ export async function sendChatMessage(question, analysisResult) {
     }
 
     const data = await response.json();
-    return data.answer || data.message || "답변을 받았지만 표시할 내용이 없습니다.";
+    return data.response || data.answer || data.message || "답변을 받았지만 표시할 내용이 없습니다.";
   } catch {
-    // 백엔드 /chat이 아직 없어도 화면 흐름을 테스트할 수 있도록 mock 답변을 제공합니다.
+    // 백엔드 /api/chat 통신 실패 시 mock 답변 반환
     return buildMockAnswer(question, analysisResult);
   }
 }
 
-function buildChatPayload(question, analysisResult) {
+function buildChatPayload(question, history, analysisResult) {
+  const formattedHistory = history.map(msg => ({
+    role: msg.role,
+    content: msg.text
+  }));
+
+  let contextStr = "";
+  if (analysisResult) {
+    contextStr = `[문서 위험도 판정]: ${analysisResult.signal_color || analysisResult.signal || '알 수 없음'}\n`;
+    if (analysisResult.main_warning || analysisResult.summary) {
+      contextStr += `[핵심 요약]: ${analysisResult.main_warning || analysisResult.summary}\n`;
+    }
+    if (analysisResult.toxic_clauses && analysisResult.toxic_clauses.length > 0) {
+      contextStr += `[탐지된 독소 조항]: ${JSON.stringify(analysisResult.toxic_clauses)}\n`;
+    }
+    if (analysisResult.reference_cases && analysisResult.reference_cases.length > 0) {
+      contextStr += `[참조 판례]: ${JSON.stringify(analysisResult.reference_cases)}\n`;
+    }
+  }
+
   return {
-    question,
-    analysis_result: analysisResult
-      ? {
-          risk_level: analysisResult.signal,
-          detected_clauses: analysisResult.toxic_clauses || [],
-          explanation: analysisResult.summary || "",
-          evidence: analysisResult.reference_cases || [],
-          related_cases: analysisResult.reference_cases || [],
-        }
-      : null,
+    query: question,
+    history: formattedHistory,
+    context: contextStr
   };
 }
 

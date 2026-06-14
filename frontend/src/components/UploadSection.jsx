@@ -16,8 +16,8 @@ function UploadSection({ documentType, uploadedFiles = [], isAnalyzing, analysis
   const [fileError, setFileError] = useState("");
 
   const firstFile = selectedFiles[0];
-  const firstFileIsImage = firstFile?.type.startsWith("image/");
-  const firstFileIsPdf = firstFile?.type === "application/pdf" || firstFile?.name.toLowerCase().endsWith(".pdf");
+  const firstFileIsImage = firstFile?.type?.startsWith("image/") || false;
+  const firstFileIsPdf = firstFile?.type === "application/pdf" || firstFile?.name?.toLowerCase().endsWith(".pdf") || false;
 
   useEffect(() => {
     if (!firstFile || !firstFileIsImage || fileError) {

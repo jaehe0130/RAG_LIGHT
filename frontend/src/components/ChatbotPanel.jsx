@@ -46,10 +46,11 @@ function ChatbotPanel({ analysisResult, externalQuestion, onExternalQuestionHand
   };
 
   const handleAsk = async (question) => {
+    const currentMessages = [...messages]; // capture history before adding new user question
     setMessages((current) => [...current, { role: "user", text: question }]);
     setIsLoading(true);
 
-    const answer = await sendChatMessage(question, analysisResult);
+    const answer = await sendChatMessage(question, currentMessages, analysisResult);
     setMessages((current) => [...current, { role: "assistant", text: answer }]);
     setIsLoading(false);
   };

@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import urllib.request
 
 from dotenv import load_dotenv
@@ -74,9 +75,13 @@ def _summarize_cases(query: str, docs: list[str]) -> list[str]:
         "[\"사례1 변환 결과\", \"사례2 변환 결과\", ...]"
     )
 
+    print(f"[RAG] 📝 검색된 판례 {len(docs)}건에 대해 LLM 요약 요청 중...")
+    t0 = time.time()
     response = _call_llm(api_key, prompt)
     if response is None:
+        print("[RAG] ❌ 요약 실패 (LLM 에러)")
         return docs
+    print(f"[RAG] ✅ 판례 요약 완료 ({time.time() - t0:.2f}초)")
     try:
         result = json.loads(response)
         if isinstance(result, list):
@@ -84,6 +89,58 @@ def _summarize_cases(query: str, docs: list[str]) -> list[str]:
     except json.JSONDecodeError:
         pass
     return docs
+
+
+def retrieve_similar_cases(query: str, top_k: int = RERANK_TOP_K, retrieve_k: int = RETRIEVE_K) -> list[str]:
+    """공정위 및 소비자원 DB에서 쿼리와 유사한 사례를 검색하고 Reranking하여 반환합니다."""
+    if not query.strip():
+        print("[RAG] 검색 쿼리가 비어있어 검색을 건너뜁니다.")
+        return []
+
+    print("[RAG] 🔍 1/3 질문 임베딩(벡터화) 진행 중...")
+    t0 = time.time()
+    # 쿼리 임베딩: "query: " prefix 필수 (passage: 와 대칭)
+    query_vector = _model.encode(
+        "query: " + query,
+        normalize_embeddings=True,
+    ).tolist()
+    print(f"[RAG] ✅ 임베딩 완료 ({time.time() - t0:.2f}초)")
+
+    print("[RAG] 🔍 2/3 Qdrant 벡터 DB 검색 중...")
+    t1 = time.time()
+    # 1. 공정위 의결서 검색 (후보 retrieve_k개)
+    ftc_hits = _client.query_points(
+        collection_name=FTC_COLLECTION,
+        query=query_vector,
+        limit=retrieve_k,
+        with_payload=True,
+    ).points
+
+    # 2. 한국소비자원 피해구제 사례 검색 (후보 retrieve_k개)
+    kca_hits = _client.query_points(
+        collection_name=KCA_COLLECTION,
+        query=query_vector,
+        limit=retrieve_k,
+        with_payload=True,
+    ).points
+    print(f"[RAG] ✅ DB 검색 완료 ({time.time() - t1:.2f}초)")
+
+    # 3. 두 컬렉션 후보 합산 후 reranker로 정밀 재정렬
+    all_docs = [
+        hit.payload.get("page_content", "")
+        for hit in (ftc_hits + kca_hits)
+        if hit.payload
+    ]
+
+    if not all_docs:
+        return []
+
+    print(f"[RAG] 🔍 3/3 검색된 문서 {len(all_docs)}건 Reranking(정밀 재정렬) 중...")
+    t2 = time.time()
+    scores = _reranker.predict([(query, doc) for doc in all_docs])
+    ranked = sorted(zip(scores, all_docs), key=lambda x: x[0], reverse=True)
+    print(f"[RAG] ✅ Reranking 완료 ({time.time() - t2:.2f}초)")
+    return [doc for _, doc in ranked[:top_k]]
 
 
 def search_rag_node(state: AgentState) -> AgentState:
@@ -94,37 +151,6 @@ def search_rag_node(state: AgentState) -> AgentState:
         print("[RAG] raw_text가 비어있어 검색을 건너뜁니다.")
         return {"retrieved_docs": []}
 
-    # 쿼리 임베딩: "query: " prefix 필수 (passage: 와 대칭)
-    query_vector = _model.encode(
-        "query: " + query,
-        normalize_embeddings=True,
-    ).tolist()
-
-    # 1. 공정위 의결서 검색 (후보 RETRIEVE_K개)
-    ftc_hits = _client.query_points(
-        collection_name=FTC_COLLECTION,
-        query=query_vector,
-        limit=RETRIEVE_K,
-        with_payload=True,
-    ).points
-
-    # 2. 한국소비자원 피해구제 사례 검색 (후보 RETRIEVE_K개)
-    kca_hits = _client.query_points(
-        collection_name=KCA_COLLECTION,
-        query=query_vector,
-        limit=RETRIEVE_K,
-        with_payload=True,
-    ).points
-
-    # 3. 두 컬렉션 후보 합산 후 reranker로 정밀 재정렬
-    all_docs = [
-        hit.payload.get("page_content", "")
-        for hit in (ftc_hits + kca_hits)
-        if hit.payload
-    ]
-
-    scores = _reranker.predict([(query, doc) for doc in all_docs])
-    ranked = sorted(zip(scores, all_docs), key=lambda x: x[0], reverse=True)
-    top_docs = [doc for _, doc in ranked[:RERANK_TOP_K]]
+    top_docs = retrieve_similar_cases(query)
 
     return {"retrieved_docs": _summarize_cases(query, top_docs)}
