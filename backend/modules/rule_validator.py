@@ -136,7 +136,7 @@ def call_openai_api(api_key: str, prompt: str) -> dict:
     """
     if api_key.startswith("AIzaSy"):
         url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-        model_name = "gemini-3.1-flash-lite"
+        model_name = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     else:
         url = "https://api.openai.com/v1/chat/completions"
         model_name = "gpt-4o-mini"
@@ -211,12 +211,32 @@ def validate_rules_node(state: dict) -> dict:
     raw_text = state.get("raw_text", "")
     input_type = state.get("input_type", "CONTRACT")
     
-    # OpenAI API 호출 시도
+    # OpenAI API 호출 시도 및 Gemini API 키 폴백 지원
     api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key or api_key == "your_openai_api_key_here":
+        api_key = os.getenv("GEMINI_API_KEY")
+        
     result = None
-    
     if api_key and api_key != "your_openai_api_key_here":
-        prompt = f"분류 타입: {input_type}\n분석할 텍스트:\n{raw_text}"
+        # RAG 검색 문서들을 컨텍스트로 프롬프트에 결합
+        retrieved_ftc = state.get("retrieved_ftc_docs", [])
+        retrieved_kca = state.get("retrieved_kca_docs", [])
+        
+        context_str = ""
+        if retrieved_ftc:
+            context_str += "\n[참고 공정거래위원회 심결례 (의결서)]\n"
+            for i, doc in enumerate(retrieved_ftc[:2], 1):
+                context_str += f"사례 {i}:\n{doc}\n\n"
+        if retrieved_kca:
+            context_str += "\n[참고 한국소비자원 분쟁조정/피해구제 사례]\n"
+            for i, doc in enumerate(retrieved_kca[:2], 1):
+                context_str += f"사례 {i}:\n{doc}\n\n"
+                
+        prompt = f"분류 타입: {input_type}\n\n분석할 약관/광고 텍스트:\n{raw_text}\n"
+        if context_str:
+            prompt += f"\n--- RAG 검색 참조 유사 사례 ---\n{context_str}"
+            prompt += "\n참조 사례에 기재된 공정위 및 소비자원의 위법 판단 논리와 근거 법조문을 적극 참고하여, 분석 대상 텍스트의 위법 여부를 정밀하게 판정하고 이유를 설명하세요."
+            
         result = call_openai_api(api_key, prompt)
         
     if not result:
