@@ -281,13 +281,13 @@ def _get_paddle_ocr() -> Any:
 
         # PaddleOCR uses lang="korean" for Korean text and still handles common
         # English words/numbers in mixed Korean documents reasonably well.
-        _paddle_ocr = PaddleOCR(use_angle_cls=True, lang="korean")
+        _paddle_ocr = PaddleOCR(use_textline_orientation=True, lang="korean")
 
     return _paddle_ocr
 
 
 def _run_paddle_on_image(ocr: Any, image_path: str) -> str:
-    result = ocr.ocr(image_path, cls=True)
+    result = ocr.ocr(image_path)
     lines: List[str] = []
 
     if not result:
