@@ -211,11 +211,8 @@ def validate_rules_node(state: dict) -> dict:
     raw_text = state.get("raw_text", "")
     input_type = state.get("input_type", "CONTRACT")
     
-    # OpenAI API 호출 시도 및 Gemini API 키 폴백 지원
+    # API 호출 시도 (OPENAI_API_KEY 환경변수에 기입된 키 사용)
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key == "your_openai_api_key_here":
-        api_key = os.getenv("GEMINI_API_KEY")
-        
     result = None
     if api_key and api_key != "your_openai_api_key_here":
         # RAG 검색 문서들을 컨텍스트로 프롬프트에 결합
