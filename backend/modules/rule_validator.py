@@ -31,7 +31,8 @@ def extract_penalty_percentages(text: str) -> list:
     num_pattern = r'(\d+|이십오|삼십오|사십오|오십오|십오|이십|삼십|사십|오십|육십|칠십|팔십|구십|일|이|삼|사|오|육|칠|팔|구|십|백)'
     patterns = [
         r'(?:위약금|수수료|공제|취소\s*수수료|환불\s*수수료|위약)\s*(?:은|는)?\s*(?:총\s*결제\s*금액의\s*)?' + num_pattern + r'\s*(?:%|퍼센트)',
-        r'(?:취소|환불|반환)\s*시\s*(?:총\s*금액의\s*)?' + num_pattern + r'\s*(?:%|퍼센트)\s*(?:공제|부과)'
+        r'(?:취소|환불|반환)\s*시\s*(?:총\s*금액의\s*)?' + num_pattern + r'\s*(?:%|퍼센트)\s*(?:공제|부과)',
+        num_pattern + r'\s*(?:%|퍼센트)\s*(?:이|가)?\s*(?:위약금|수수료|공제|위약)\s*(?:으로|로)?\s*(?:부과|청구|공제)'
     ]
     percentages = []
     for pattern in patterns:
@@ -190,7 +191,7 @@ def call_openai_api(api_key: str, prompt: str) -> dict:
     )
     
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             res_body = response.read().decode("utf-8")
             res_json = json.loads(res_body)
             content = res_json["choices"][0]["message"]["content"].strip()
@@ -366,11 +367,19 @@ def validate_rules_node(state: dict) -> dict:
             if not exists:
                 result["toxic_clauses"].append(reason_item)
                 
-        # 요약 설명 강제 보강 (문맥 모순 방지를 위해 기존 의견을 덮어쓰고 위반 항목 리스트업)
+        # 요약 설명 강제 보강 (문맥 모순 방지를 위해 기존 의견을 보존하면서 정량 위반 경고 추가)
         reasons_summary = ", ".join([f"'{r['clause']}'" for r in override_reasons])
-        result["llm_analysis"] = (
-            f"[정량 검증 위반 발견] 본 문서에서 명백한 법률 위반 기준({reasons_summary})이 감지되어 강제 RED 판정되었습니다. "
-            f"자세한 위법성 여부는 아래에 탐지된 독소 조항과 상세 법적 근거를 확인해 주세요."
-        )
+        original_analysis = result.get("llm_analysis", "").strip()
+        
+        if not original_analysis or "위반 조항이 검출되지 않았습니다" in original_analysis:
+            result["llm_analysis"] = (
+                f"[정량 검증 위반 발견] 본 문서에서 명백한 법률 위반 기준({reasons_summary})이 감지되어 강제 RED 판정되었습니다. "
+                f"자세한 위법성 여부는 아래에 탐지된 독소 조항과 상세 법적 근거를 확인해 주세요."
+            )
+        else:
+            # 기존 LLM 분석 결과를 유지하며 정량 검증 에러 항목 추가
+            result["llm_analysis"] = (
+                f"{original_analysis}\n\n(정량 검증 위반 탐지: {reasons_summary})"
+            )
 
     return result
