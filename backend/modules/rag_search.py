@@ -56,8 +56,12 @@ def _call_llm(api_key: str, prompt: str) -> str | None:
 
 def _summarize_cases(query: str, docs: list[str]) -> list[str]:
     """검색된 원문 청크를 LLM으로 친근한 말투로 변환. API 키 없으면 원문 그대로 반환."""
+    docs = [d for d in docs if d.strip()]
+    if not docs:
+        return []
+
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key == "your_openai_api_key_here" or not docs:
+    if not api_key or api_key == "your_openai_api_key_here":
         return docs
 
     numbered = "\n\n".join(f"[사례 {i+1}]\n{doc}" for i, doc in enumerate(docs))
@@ -86,6 +90,9 @@ def search_rag_node(state: AgentState) -> AgentState:
     print("[Node] 공정위 및 소비자원 DB Dense 검색 + Reranking 중...")
 
     query = state["raw_text"]
+    if not query.strip():
+        print("[RAG] raw_text가 비어있어 검색을 건너뜁니다.")
+        return {"retrieved_docs": []}
 
     # 쿼리 임베딩: "query: " prefix 필수 (passage: 와 대칭)
     query_vector = _model.encode(
