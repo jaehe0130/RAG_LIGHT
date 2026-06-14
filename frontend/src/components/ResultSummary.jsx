@@ -32,23 +32,31 @@ function ResultSummary({ result }) {
         )}
       </div>
 
-      <div className="ocr-quality">
-        <div>
-          <span>OCR 추출 글자 수</span>
-          <strong>{ocrLength}</strong>
-        </div>
-        <div>
-          <span>OCR 상태</span>
-          <strong>{ocrLength > 0 ? "텍스트 추출됨" : "텍스트 없음"}</strong>
-        </div>
-      </div>
-
       <div className="reference-cases">
         <span className="field-label">유사 피해구제 및 의결서 사례 (RAG 검색 결과)</span>
         {result.reference_cases && result.reference_cases.length > 0 ? (
-          <div className="cases-list" style={{ maxHeight: "200px", overflowY: "auto", background: "var(--color-surface)", padding: "12px", borderRadius: "8px", border: "1px solid var(--color-border)", fontSize: "0.85rem", color: "var(--color-text-secondary)" }}>
+          <div
+            className="cases-list"
+            style={{
+              maxHeight: "200px",
+              overflowY: "auto",
+              background: "var(--color-surface)",
+              padding: "12px",
+              borderRadius: "8px",
+              border: "1px solid var(--color-border)",
+              fontSize: "0.85rem",
+              color: "var(--color-text-secondary)",
+            }}
+          >
             {result.reference_cases.map((caseText, idx) => (
-              <div key={idx} style={{ marginBottom: "12px", paddingBottom: "12px", borderBottom: "1px dashed var(--color-border)" }}>
+              <div
+                key={idx}
+                style={{
+                  marginBottom: "12px",
+                  paddingBottom: "12px",
+                  borderBottom: "1px dashed var(--color-border)",
+                }}
+              >
                 <strong>사례 {idx + 1}</strong>
                 <p style={{ margin: "4px 0 0 0", whiteSpace: "pre-wrap" }}>{caseText}</p>
               </div>
