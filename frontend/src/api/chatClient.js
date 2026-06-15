@@ -42,6 +42,9 @@ function buildChatPayload(question, history, analysisResult) {
     if (analysisResult.reference_cases && analysisResult.reference_cases.length > 0) {
       contextStr += `[참조 판례]: ${JSON.stringify(analysisResult.reference_cases)}\n`;
     }
+    if (analysisResult.report_form && analysisResult.report_form.content) {
+      contextStr += `[1차 신고서 초안]:\n${analysisResult.report_form.content}\n`;
+    }
   }
 
   return {

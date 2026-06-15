@@ -16,8 +16,8 @@ FTC_COLLECTION = "ftc_decisions"
 KCA_COLLECTION = "kca_cases"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
 RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
-RETRIEVE_K = 10  # 컬렉션당 후보 수
-RERANK_TOP_K = 5  # reranker 통과 후 최종 반환 수
+RETRIEVE_K = 3  # 최적화: 기존 10에서 3으로 대폭 축소하여 Reranking 시간 단축
+RERANK_TOP_K = 2  # 최종 반환 수 축소
 
 # 모듈 임포트 시 1회만 초기화
 _model = SentenceTransformer(EMBEDDING_MODEL)
@@ -153,4 +153,4 @@ def search_rag_node(state: AgentState) -> AgentState:
 
     top_docs = retrieve_similar_cases(query)
 
-    return {"retrieved_docs": _summarize_cases(query, top_docs)}
+    return {"retrieved_docs": top_docs}

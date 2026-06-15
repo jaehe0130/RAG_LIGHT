@@ -146,12 +146,6 @@ function App() {
 function LandingPage({ onStart }) {
   return (
     <div className="landing-shell">
-      <nav className="landing-nav" aria-label="서비스 안내">
-        <strong>찰칵! 소비자 공정 Guard</strong>
-        <button type="button" onClick={onStart}>
-          분석 시작
-        </button>
-      </nav>
 
       <main>
         <section className="landing-hero">
