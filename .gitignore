@@ -24,3 +24,4 @@ Thumbs.db
 
 # PDFs
 *.pdf
+!frontend/public/forms/*.pdf
