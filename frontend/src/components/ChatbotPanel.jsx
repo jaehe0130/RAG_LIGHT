@@ -1,11 +1,11 @@
-import React, { useMemo, useState, useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { sendChatMessage } from "../api/chatClient.js";
 import SuggestedQuestionChips from "./SuggestedQuestionChips.jsx";
 
 const BEFORE_ANALYSIS_QUESTIONS = ["무엇을 업로드하면 되나요?", "광고 캡처도 분석되나요?", "개인정보는 저장되나요?", "분석 기준이 뭔가요?"];
 
 const AFTER_ANALYSIS_QUESTIONS = [
-  "왜 위험 판정인가요?",
+  "왜 이런 판정인가요?",
   "문제 문구만 다시 보여줘",
   "소비자가 할 수 있는 조치는?",
   "신고서 초안 작성해줘",
@@ -21,20 +21,15 @@ function ChatbotPanel({ analysisResult, externalQuestion, onExternalQuestionHand
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef(null);
 
   const suggestedQuestions = useMemo(
     () => (analysisResult ? AFTER_ANALYSIS_QUESTIONS : BEFORE_ANALYSIS_QUESTIONS),
     [analysisResult],
   );
 
-  const messagesEndRef = useRef(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, isLoading]);
 
   useEffect(() => {
@@ -56,7 +51,7 @@ function ChatbotPanel({ analysisResult, externalQuestion, onExternalQuestionHand
   };
 
   const handleAsk = async (question) => {
-    const currentMessages = [...messages]; // capture history before adding new user question
+    const currentMessages = [...messages];
     setMessages((current) => [...current, { role: "user", text: question }]);
     setIsLoading(true);
 
@@ -69,7 +64,6 @@ function ChatbotPanel({ analysisResult, externalQuestion, onExternalQuestionHand
     <section className={`chatbot-panel ${variant}`} aria-label="분석 결과 도우미">
       <div className="chatbot-header">
         <div>
-          <p className="eyebrow">Chat</p>
           <h2>분석 결과 도우미</h2>
         </div>
         {onClose && (
