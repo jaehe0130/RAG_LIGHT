@@ -7,11 +7,11 @@ import RiskResultCard from "./components/RiskResultCard.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 
 const PROGRESS_STEP_COUNT = 5;
+const DEFAULT_DOC_TYPE = "terms";
 
 function App() {
   const [view, setView] = useState("landing");
   const [selectedFile, setSelectedFile] = useState(null);
-  const [docType, setDocType] = useState("terms");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progressIndex, setProgressIndex] = useState(0);
   const [analysisResult, setAnalysisResult] = useState(null);
@@ -42,8 +42,8 @@ function App() {
     setAnalysisResult(null);
 
     try {
-      const apiResult = await analyzeDocument({ file: selectedFile, docType });
-      const viewModel = mapApiResultToViewModel(apiResult, selectedFile, docType);
+      const apiResult = await analyzeDocument({ file: selectedFile, docType: DEFAULT_DOC_TYPE });
+      const viewModel = mapApiResultToViewModel(apiResult, selectedFile);
 
       setProgressIndex(PROGRESS_STEP_COUNT - 1);
       setAnalysisResult(viewModel);
@@ -72,7 +72,6 @@ function App() {
     <div className="app-shell analysis-shell">
       <header className="hero-header analysis-header">
         <div>
-          <p className="eyebrow">공정거래 문서 분석</p>
           <h1>소비자에게 불리할 수 있는 문구를 쉽고 정확하게 확인하세요</h1>
           <p>약관, 광고 캡처, 계약서 이미지를 올리면 위험 문구를 찾아 신호등 판정과 다음 조치를 안내합니다.</p>
         </div>
@@ -86,7 +85,6 @@ function App() {
           <section className="top-grid">
             <UploadPanel
               selectedFile={selectedFile}
-              docType={docType}
               isAnalyzing={isAnalyzing}
               errorMessage={errorMessage}
               onFileChange={(file) => {
@@ -94,7 +92,6 @@ function App() {
                 setProgressIndex(file ? 1 : 0);
                 setErrorMessage("");
               }}
-              onDocTypeChange={setDocType}
               onAnalyze={handleAnalyze}
             />
 
@@ -152,9 +149,16 @@ function LandingPage({ onStart }) {
           <div className="landing-hero-copy">
             <span className="landing-badge">AI 기반 불공정 문구 점검</span>
             <h1>복잡한 약관과 광고 문구, 신호등처럼 쉽게 확인하세요</h1>
-            <p>
-              문서를 올리면 AI가 소비자에게 불리할 수 있는 표현을 찾아 안전·주의·위험으로 안내하고, 필요한 경우 신고서 초안까지 정리해드립니다.
-            </p>
+            <div className="landing-hero-summary">
+              <p>
+                문서를 올리면 AI가 소비자에게 불리할 수 있는 표현을 찾아드립니다.
+              </p>
+              <ul>
+                <li>안전·주의·위험 신호등으로 결과를 한눈에 확인</li>
+                <li>위험 문구와 이유를 쉬운 말로 정리</li>
+                <li>필요한 경우 신고서 초안까지 준비</li>
+              </ul>
+            </div>
             <div className="landing-actions">
               <button type="button" className="landing-primary" onClick={onStart}>
                 문서 분석 시작하기
@@ -261,7 +265,7 @@ function ResultDetails({ result }) {
   );
 }
 
-function mapApiResultToViewModel(apiResult, file, docType) {
+function mapApiResultToViewModel(apiResult, file) {
   const analysis = apiResult.analysis || {};
   const signal = normalizeSignal(analysis.signal_color);
   const clauses = normalizeClauses(analysis.toxic_clauses || []);
@@ -276,8 +280,6 @@ function mapApiResultToViewModel(apiResult, file, docType) {
     reference_cases: apiResult.reference_cases || [],
     status: apiResult.status || "",
     fileName: file?.name || "",
-    docType,
-    docTypeLabel: docType === "terms" ? "약관·계약서" : "광고·캡처",
   };
 }
 

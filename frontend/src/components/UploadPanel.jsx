@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 
 const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png";
 
-function UploadPanel({ selectedFile, docType, isAnalyzing, errorMessage, onFileChange, onDocTypeChange, onAnalyze }) {
+function UploadPanel({ selectedFile, isAnalyzing, errorMessage, onFileChange, onAnalyze }) {
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [localError, setLocalError] = useState("");
@@ -59,17 +59,6 @@ function UploadPanel({ selectedFile, docType, isAnalyzing, errorMessage, onFileC
         <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
           파일 선택
         </button>
-      </div>
-
-      <div className="doc-type-control" role="radiogroup" aria-label="문서 종류">
-        <label className={docType === "terms" ? "is-selected" : ""}>
-          <input type="radio" name="docType" value="terms" checked={docType === "terms"} onChange={() => onDocTypeChange("terms")} />
-          약관·계약서
-        </label>
-        <label className={docType === "ad" ? "is-selected" : ""}>
-          <input type="radio" name="docType" value="ad" checked={docType === "ad"} onChange={() => onDocTypeChange("ad")} />
-          광고·캡처
-        </label>
       </div>
 
       {(localError || errorMessage) && <p className="user-error">{localError || errorMessage}</p>}
