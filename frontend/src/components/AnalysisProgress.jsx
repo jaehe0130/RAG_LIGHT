@@ -1,29 +1,40 @@
 import React from "react";
 
-const STEPS = ["문서 업로드 완료", "OCR 텍스트 추출 중", "위험 문구 분석 중", "관련 사례 비교 중", "결과 정리 중"];
-
 function AnalysisProgress({ currentStepIndex, isAnalyzing, hasFile }) {
+  const progressPercent = isAnalyzing
+    ? Math.max(24, Math.min(92, 24 + currentStepIndex * 17))
+    : hasFile
+      ? 100
+      : 0;
+
   return (
-    <section className="progress-panel" aria-label="분석 진행 상태">
+    <section className={`progress-panel ${isAnalyzing ? "is-analyzing" : ""}`} aria-label="분석 진행 상태">
       <div className="section-heading">
-        <p className="eyebrow">Progress</p>
-        <h2>분석 진행 상태</h2>
+        <p className="eyebrow">Analysis</p>
+        <h2>문서를 분석하고 있어요</h2>
+        <p>업로드한 문서의 주요 문구와 소비자 위험 신호를 차분히 확인하고 있습니다.</p>
       </div>
 
-      <ol className="progress-steps">
-        {STEPS.map((step, index) => {
-          const isDone = hasFile && index < currentStepIndex;
-          const isActive = isAnalyzing && index === currentStepIndex;
-          const isReadyUpload = hasFile && !isAnalyzing && index === 0;
+      <div className="analysis-document-card" aria-hidden="true">
+        <div className="document-sheet">
+          <span className="document-line line-long" />
+          <span className="document-line" />
+          <span className="document-line line-short" />
+          <span className="document-block" />
+          <span className="document-line" />
+          {isAnalyzing && <span className="scan-line" />}
+        </div>
+        <div className="magnifier-icon">
+          <span />
+        </div>
+      </div>
 
-          return (
-            <li key={step} className={`${isDone || isReadyUpload ? "is-done" : ""} ${isActive ? "is-active" : ""}`}>
-              <span>{index + 1}</span>
-              <strong>{step}</strong>
-            </li>
-          );
-        })}
-      </ol>
+      <div className="analysis-progress-footer">
+        <div className="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progressPercent}>
+          <span style={{ width: `${progressPercent}%` }} />
+        </div>
+        <p>{hasFile ? "잠시만 기다려주세요. 결과가 준비되면 신호등 판정으로 안내합니다." : "분석할 문서를 먼저 업로드해주세요."}</p>
+      </div>
     </section>
   );
 }

@@ -53,7 +53,7 @@ function UploadPanel({ selectedFile, docType, isAnalyzing, errorMessage, onFileC
         />
 
         <div className="drop-copy">
-          <strong>{selectedFile ? selectedFile.name : "파일을 여기에 끌어오거나 선택하세요"}</strong>
+          <strong>{selectedFile ? selectedFile.name : "파일을 여기에 놓거나 선택하세요"}</strong>
           <span>{selectedFile ? getFileDescription(selectedFile) : "업로드 가능 형식: PDF, JPG, PNG"}</span>
         </div>
 
