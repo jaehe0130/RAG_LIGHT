@@ -233,6 +233,44 @@ function LandingPage({ onStart }) {
             </li>
           </ol>
         </section>
+        <section className="form-preview-band" id="form-previews">
+          <div className="landing-section-heading">
+            <h2>지원 양식 미리보기 및 다운로드</h2>
+            <p>RAG Light가 자동 완성을 지원하는 공식 양식들입니다. 직접 다운로드하여 제출하실 수도 있습니다.</p>
+          </div>
+          <div className="form-preview-grid">
+            <a href="/forms/form5.pdf" download="불공정거래행위_신고서.pdf" className="form-preview-card">
+              <span className="form-icon">📄</span>
+              <strong>불공정거래행위 신고서</strong>
+              <small>양식 다운로드 (PDF)</small>
+            </a>
+            <a href="/forms/form6.pdf" download="표시광고법_위반_신고서.pdf" className="form-preview-card">
+              <span className="form-icon">📄</span>
+              <strong>표시·광고법 위반 신고서</strong>
+              <small>양식 다운로드 (PDF)</small>
+            </a>
+            <a href="/forms/form7.pdf" download="방문판매법_위반_신고서.pdf" className="form-preview-card">
+              <span className="form-icon">📄</span>
+              <strong>방문판매법 위반 신고서</strong>
+              <small>양식 다운로드 (PDF)</small>
+            </a>
+            <a href="/forms/form10.pdf" download="할부거래법_위반_신고서.pdf" className="form-preview-card">
+              <span className="form-icon">📄</span>
+              <strong>할부거래법 위반 신고서</strong>
+              <small>양식 다운로드 (PDF)</small>
+            </a>
+            <a href="/forms/form8.pdf" download="불공정약관_심사청구서.pdf" className="form-preview-card">
+              <span className="form-icon">📄</span>
+              <strong>불공정약관 심사 청구서</strong>
+              <small>양식 다운로드 (PDF)</small>
+            </a>
+            <a href="/forms/form9.pdf" download="전자상거래법_위반_신고서.pdf" className="form-preview-card">
+              <span className="form-icon">📄</span>
+              <strong>전자상거래법 위반 신고서</strong>
+              <small>양식 다운로드 (PDF)</small>
+            </a>
+          </div>
+        </section>
 
         <section className="landing-cta">
           <h2>지금 바로 내 문서를 점검해볼까요?</h2>
