@@ -64,7 +64,6 @@ function ChatbotPanel({ analysisResult, externalQuestion, onExternalQuestionHand
     <section className={`chatbot-panel ${variant}`} aria-label="분석 결과 도우미">
       <div className="chatbot-header">
         <div>
-          <p className="eyebrow">Chat</p>
           <h2>분석 결과 도우미</h2>
         </div>
         {onClose && (

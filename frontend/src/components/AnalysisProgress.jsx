@@ -10,7 +10,6 @@ function AnalysisProgress({ currentStepIndex, isAnalyzing, hasFile }) {
   return (
     <section className={`progress-panel ${isAnalyzing ? "is-analyzing" : ""}`} aria-label="분석 진행 상태">
       <div className="section-heading">
-        <p className="eyebrow">Analysis</p>
         <h2>문서를 분석하고 있어요</h2>
         <p>업로드한 문서의 주요 문구와 소비자 위험 신호를 차분히 확인하고 있습니다.</p>
       </div>

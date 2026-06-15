@@ -210,7 +210,6 @@ function LandingPage({ onStart }) {
 
         <section className="process-band" id="how-it-works">
           <div className="landing-section-heading">
-            <p className="eyebrow">Process</p>
             <h2>이렇게 사용해요</h2>
           </div>
           <ol className="process-list">
