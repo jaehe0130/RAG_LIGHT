@@ -32,7 +32,6 @@ function UploadPanel({ selectedFile, docType, isAnalyzing, errorMessage, onFileC
   return (
     <section className="upload-panel" aria-label="문서 업로드">
       <div className="section-heading">
-        <p className="eyebrow">Upload</p>
         <h2>분석할 문서를 올려주세요</h2>
         <p>PDF, JPG, PNG 형식의 약관, 광고 캡처, 계약서 이미지를 지원합니다.</p>
       </div>
@@ -53,7 +52,7 @@ function UploadPanel({ selectedFile, docType, isAnalyzing, errorMessage, onFileC
         />
 
         <div className="drop-copy">
-          <strong>{selectedFile ? selectedFile.name : "파일을 여기에 끌어오거나 선택하세요"}</strong>
+          <strong>{selectedFile ? selectedFile.name : "파일을 여기에 놓거나 선택하세요"}</strong>
           <span>{selectedFile ? getFileDescription(selectedFile) : "업로드 가능 형식: PDF, JPG, PNG"}</span>
         </div>
 

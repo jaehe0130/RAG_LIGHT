@@ -1,5 +1,16 @@
 import React, { useState } from "react";
 
+const REPORT_LINKS = [
+  {
+    label: "공정위 홈페이지",
+    href: "https://www.ftc.go.kr/www/index.do",
+  },
+  {
+    label: "국민신문고 홈페이지",
+    href: "https://www.epeople.go.kr/index.jsp",
+  },
+];
+
 function ReportForm({ reportText }) {
   const [copyState, setCopyState] = useState("idle");
 
@@ -44,6 +55,17 @@ function ReportForm({ reportText }) {
         <button type="button" className="secondary-action" onClick={handlePdfDownload}>
           PDF 다운로드
         </button>
+      </div>
+
+      <div className="report-link-box" aria-label="신고서 제출 홈페이지 바로가기">
+        <span>신고서 제출 바로가기</span>
+        <div className="report-link-actions">
+          {REPORT_LINKS.map((link) => (
+            <a key={link.href} href={link.href} target="_blank" rel="noreferrer">
+              {link.label}
+            </a>
+          ))}
+        </div>
       </div>
 
       {copyState === "copied" && <p className="feedback success">복사되었습니다.</p>}
@@ -118,7 +140,7 @@ function buildSingleImagePdf(imageBinary, pageWidth, pageHeight) {
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
     `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`,
     `<< /Type /XObject /Subtype /Image /Width ${pageWidth * 2} /Height ${pageHeight * 2} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBinary.length} >>\nstream\n${imageBinary}\nendstream`,
-    `<< /Length ${drawCommand.length} >>\nstream\n${drawCommand}\nendstream`
+    `<< /Length ${drawCommand.length} >>\nstream\n${drawCommand}\nendstream`,
   ];
 
   let pdf = "%PDF-1.4\n";

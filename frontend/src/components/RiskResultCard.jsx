@@ -4,20 +4,20 @@ const RISK_COPY = {
   GREEN: {
     label: "안전",
     tone: "safe",
-    title: "큰 위험 문구는 보이지 않습니다",
-    nextAction: "그래도 계약 전 주요 조건을 한 번 더 확인해 주세요.",
+    title: "뚜렷한 위험 문구는 보이지 않습니다",
+    nextAction: "그래도 계약 전 주요 조건은 한 번 더 확인해주세요.",
   },
   YELLOW: {
     label: "주의",
     tone: "warning",
     title: "확인이 필요한 문구가 있습니다",
-    nextAction: "환불, 위약금, 제한 조건을 다시 확인하고 캡처를 보관해 주세요.",
+    nextAction: "환불, 위약금, 제한 조건을 다시 확인하고 관련 화면을 보관해주세요.",
   },
   RED: {
     label: "위험",
     tone: "danger",
     title: "소비자에게 불리할 수 있는 문구가 보입니다",
-    nextAction: "계약 전이라면 재확인하고, 피해가 있다면 관련 기관 상담을 권장합니다.",
+    nextAction: "계약 전이라면 신중히 검토하고, 피해가 있다면 관계 기관 상담을 권장합니다.",
   },
 };
 
@@ -52,7 +52,7 @@ function RiskResultCard({ result, onAskQuestion }) {
       </div>
 
       <div className="risk-actions">
-        <button type="button" onClick={() => onAskQuestion("왜 위험 판정인가요?")}>
+        <button type="button" onClick={() => onAskQuestion("왜 이런 판정인가요?")}>
           이유 물어보기
         </button>
         <button type="button" className="secondary-action" onClick={() => onAskQuestion("소비자가 할 수 있는 조치는?")}>
