@@ -1123,9 +1123,7 @@ button:disabled {
 
 .case-list {
   display: grid;
-  gap: 10px;
-  max-height: 240px;
-  overflow: auto;
+  gap: 12px;
   margin: 12px 0 0;
   padding: 0;
   list-style: none;
@@ -1134,10 +1132,47 @@ button:disabled {
 .case-list li {
   border-left: 4px solid #9cb7d1;
   border-radius: 6px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   color: #35475b;
   background: #f8fbfe;
   line-height: 1.6;
+}
+
+.case-list li span {
+  display: inline-flex;
+  margin-bottom: 5px;
+  color: #165a96;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.case-list li p {
+  margin: 0;
+  color: #35475b;
+  line-height: 1.65;
+  word-break: keep-all;
+}
+
+.case-summary {
+  font-weight: 700;
+}
+
+.case-detail {
+  margin-top: 8px;
+  border-top: 1px solid #dde8f2;
+  padding-top: 8px;
+}
+
+.case-detail summary {
+  cursor: pointer;
+  color: #165a96;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.case-detail p {
+  margin-top: 8px;
+  color: #4a5c70;
 }
 
 .extracted-text {

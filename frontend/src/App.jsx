@@ -373,7 +373,14 @@ function ResultDetails({ result }) {
         {result.reference_cases.length > 0 ? (
           <ul className="case-list">
             {result.reference_cases.slice(0, 3).map((caseText, index) => (
-              <li key={`${index}-${caseText.slice(0, 24)}`}>{caseText}</li>
+              <li key={`${index}-${caseText.slice(0, 24)}`}>
+                <span>사례 {index + 1}</span>
+                <p className="case-summary">관련 사례 전문은 아래에서 펼쳐 확인할 수 있습니다.</p>
+                <details className="case-detail">
+                  <summary>사례 내용 보기</summary>
+                  <p>{caseText}</p>
+                </details>
+              </li>
             ))}
           </ul>
         ) : (

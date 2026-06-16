@@ -61,12 +61,21 @@ function ChatbotPanel({
   };
 
   const handleAsk = async (question) => {
-    const currentMessages = [...messages];
-    setMessages((current) => [...current, { role: "user", text: question }]);
+    const pendingId = `pending-${Date.now()}`;
+    const currentMessages = [...messages, { role: "user", text: question }];
+    setMessages((current) => [
+      ...current,
+      { role: "user", text: question },
+      { id: pendingId, role: "assistant", text: "답변 중입니다...", isPending: true },
+    ]);
     setIsLoading(true);
 
     const answer = await sendChatMessage(question, currentMessages, analysisResult);
-    setMessages((current) => [...current, { role: "assistant", text: answer }]);
+    setMessages((current) =>
+      current.map((message) =>
+        message.id === pendingId ? { role: "assistant", text: answer } : message,
+      ),
+    );
     setIsLoading(false);
   };
 
@@ -85,11 +94,11 @@ function ChatbotPanel({
 
       <div className="chat-messages" aria-live="polite">
         {messages.map((message, index) => (
-          <div key={`${message.role}-${index}`} className={`chat-message ${message.role}`}>
+          <div key={message.id || `${message.role}-${index}`} className={`chat-message ${message.role} ${message.isPending ? "is-loading" : ""}`}>
             <p>{message.text}</p>
           </div>
         ))}
-        {isLoading && (
+        {false && (
           <div className="chat-message assistant is-loading">
             <p>답변을 정리하는 중입니다...</p>
           </div>
