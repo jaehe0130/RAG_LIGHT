@@ -984,6 +984,17 @@ button:disabled {
   background: var(--color-primary);
 }
 
+.recommended-form-actions .preview-action {
+  border-color: #2563eb;
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.recommended-form-actions .preview-action:hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+}
+
 .feedback {
   margin: 10px 0 0;
   color: #8a2626;

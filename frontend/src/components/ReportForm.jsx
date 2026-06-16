@@ -85,7 +85,7 @@ function ReportForm({ reportText, result }) {
                 <p>{form.description}</p>
               </div>
               <div className="recommended-form-actions">
-                <a href={form.file} target="_blank" rel="noreferrer">
+                <a href={form.file} target="_blank" rel="noreferrer" className="preview-action">
                   미리보기
                 </a>
                 <a href={form.file} download>
