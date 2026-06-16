@@ -32,7 +32,6 @@ function RiskResultCard({ result, onAskQuestion }) {
       <div className="risk-topline">
         <span className="risk-light" aria-hidden="true" />
         <div>
-          <p className="eyebrow">Result</p>
           <h2>{copy.label} 판정</h2>
         </div>
       </div>

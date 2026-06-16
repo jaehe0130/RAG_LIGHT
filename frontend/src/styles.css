@@ -393,6 +393,10 @@ button:disabled {
   gap: 18px;
 }
 
+.analysis-header > div {
+  min-width: 0;
+}
+
 .hero-header h1 {
   margin: 0;
   color: #243d64;
@@ -405,7 +409,10 @@ button:disabled {
   max-width: 760px;
   margin: 10px 0 0;
   color: var(--color-muted);
-  line-height: 1.6;
+  line-height: 1.75;
+  overflow: visible;
+  overflow-wrap: break-word;
+  word-break: keep-all;
 }
 
 .eyebrow {
@@ -475,6 +482,27 @@ button:disabled {
   line-height: 1.55;
 }
 
+.upload-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reset-input-action {
+  flex: 0 0 auto;
+  min-height: 32px;
+  border: 1px solid var(--color-line);
+  padding: 0 0.7rem;
+  color: #526174;
+  background: #ffffff;
+  font-weight: 800;
+}
+
+.reset-input-action:hover:not(:disabled) {
+  background: #eef3f8;
+}
+
 .drop-zone {
   display: grid;
   gap: 14px;
@@ -515,6 +543,64 @@ button:disabled {
 .detail-card p {
   color: var(--color-muted);
   line-height: 1.6;
+}
+
+.file-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.file-clear-action {
+  min-height: 32px;
+  border: 1px solid var(--color-line);
+  padding: 0 0.62rem;
+  color: #526174;
+  background: #ffffff;
+}
+
+.file-clear-action:hover:not(:disabled) {
+  background: #eef3f8;
+}
+
+.file-action-row .secondary-action {
+  min-height: 32px;
+  padding: 0 0.62rem;
+}
+
+.text-input-area {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.text-input-area span {
+  color: #40536f;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.text-input-area textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 13px;
+  color: var(--color-ink);
+  background: #f8fbfe;
+  font: inherit;
+  line-height: 1.6;
+}
+
+.text-input-area textarea:focus {
+  border-color: var(--color-primary);
+  outline: 3px solid rgba(63, 111, 181, 0.16);
+}
+
+.text-input-area textarea:disabled {
+  opacity: 0.7;
 }
 
 .visually-hidden {
@@ -813,6 +899,91 @@ button:disabled {
   background: #d7e4f1;
 }
 
+.recommended-form-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  border-top: 1px solid #e1e8f0;
+  padding-top: 18px;
+}
+
+.recommended-form-heading h3 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 1rem;
+}
+
+.recommended-form-heading p {
+  margin: 6px 0 0;
+  color: var(--color-muted);
+  line-height: 1.55;
+}
+
+.recommended-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.recommended-form-card {
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  min-height: 190px;
+  border: 1px solid #d6e2ee;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f8fbfe;
+}
+
+.recommended-form-card h4 {
+  margin: 0;
+  color: #17212b;
+  font-size: 0.98rem;
+}
+
+.recommended-form-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #40536f;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.recommended-form-card p {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  line-height: 1.55;
+}
+
+.recommended-form-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.recommended-form-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid #b9cadb;
+  border-radius: 6px;
+  padding: 0 0.7rem;
+  color: var(--color-primary-dark);
+  background: #ffffff;
+  font-size: 0.88rem;
+  font-weight: 900;
+  text-align: center;
+  text-decoration: none;
+}
+
+.recommended-form-actions a:hover {
+  border-color: var(--color-primary);
+  color: #ffffff;
+  background: var(--color-primary);
+}
+
 .feedback {
   margin: 10px 0 0;
   color: #8a2626;
@@ -1068,14 +1239,21 @@ button:disabled {
 }
 
 .suggested-chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 .chip-button {
   border-radius: 999px;
   font-size: 0.84rem;
+  min-height: 46px;
+  min-width: 0;
+  padding: 8px 10px;
+  line-height: 1.35;
+  overflow: visible;
+  white-space: normal;
+  word-break: keep-all;
 }
 
 .chat-input-row {
@@ -1273,6 +1451,14 @@ button:disabled {
     display: grid;
   }
 
+  .upload-heading {
+    display: grid;
+  }
+
+  .reset-input-action {
+    width: max-content;
+  }
+
   .landing-actions > *,
   .report-link-actions a,
   .button-row button {
@@ -1280,6 +1466,10 @@ button:disabled {
   }
 
   .process-list {
+    grid-template-columns: 1fr;
+  }
+
+  .recommended-form-grid {
     grid-template-columns: 1fr;
   }
 

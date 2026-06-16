@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 
 const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png";
 
-function UploadPanel({ selectedFile, isAnalyzing, errorMessage, onFileChange, onAnalyze }) {
+function UploadPanel({ selectedFile, textInput, isAnalyzing, errorMessage, onFileChange, onTextChange, onResetAll, onAnalyze }) {
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [localError, setLocalError] = useState("");
@@ -29,11 +29,36 @@ function UploadPanel({ selectedFile, isAnalyzing, errorMessage, onFileChange, on
     handleFiles(event.dataTransfer.files);
   };
 
+  const handleClearFile = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setLocalError("");
+    onFileChange(null);
+  };
+
+  const handleResetAll = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setLocalError("");
+    onResetAll();
+  };
+
+  const hasInput = Boolean(selectedFile || textInput.trim());
+
   return (
     <section className="upload-panel" aria-label="문서 업로드">
-      <div className="section-heading">
-        <h2>분석할 문서를 올려주세요</h2>
-        <p>PDF, JPG, PNG 형식의 약관, 광고 캡처, 계약서 이미지를 지원합니다.</p>
+      <div className="section-heading upload-heading">
+        <div>
+          <h2>분석할 문서를 올려주세요</h2>
+          <p>파일을 업로드하거나 약관, 계약서, 광고 문구를 직접 입력할 수 있습니다.</p>
+        </div>
+        {hasInput && (
+          <button type="button" className="reset-input-action" onClick={handleResetAll} disabled={isAnalyzing}>
+            전체 초기화
+          </button>
+        )}
       </div>
 
       <div
@@ -56,14 +81,31 @@ function UploadPanel({ selectedFile, isAnalyzing, errorMessage, onFileChange, on
           <span>{selectedFile ? getFileDescription(selectedFile) : "업로드 가능 형식: PDF, JPG, PNG"}</span>
         </div>
 
-        <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
-          파일 선택
-        </button>
+        <div className="file-action-row">
+          <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
+            파일 선택
+          </button>
+          {selectedFile && (
+            <button type="button" className="file-clear-action" onClick={handleClearFile} disabled={isAnalyzing}>
+              파일 지우기
+            </button>
+          )}
+        </div>
       </div>
+
+      <label className="text-input-area">
+        <span>직접 입력(선택)</span>
+        <textarea
+          value={textInput}
+          placeholder="약관, 계약서, 광고 문구를 직접 입력하거나 붙여넣으세요."
+          disabled={isAnalyzing}
+          onChange={(event) => onTextChange(event.target.value)}
+        />
+      </label>
 
       {(localError || errorMessage) && <p className="user-error">{localError || errorMessage}</p>}
 
-      <button type="button" className="primary-action" disabled={!selectedFile || isAnalyzing || Boolean(localError)} onClick={onAnalyze}>
+      <button type="button" className="primary-action" disabled={(!selectedFile && !textInput.trim()) || isAnalyzing || Boolean(localError)} onClick={onAnalyze}>
         {isAnalyzing ? "분석 중입니다" : "문서 분석하기"}
       </button>
     </section>

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { sendChatMessage } from "../api/chatClient.js";
 import SuggestedQuestionChips from "./SuggestedQuestionChips.jsx";
 
-const BEFORE_ANALYSIS_QUESTIONS = ["무엇을 업로드하면 되나요?", "광고 캡처도 분석되나요?", "개인정보는 저장되나요?", "분석 기준이 뭔가요?"];
+const BEFORE_ANALYSIS_QUESTIONS = ["무엇을 넣으면 되나요?", "광고 캡처 분석 가능?", "개인정보 저장되나요?", "분석 기준은 뭔가요?"];
 
 const AFTER_ANALYSIS_QUESTIONS = [
   "왜 이런 판정인가요?",
@@ -12,8 +12,16 @@ const AFTER_ANALYSIS_QUESTIONS = [
   "관련 기관 알려줘",
 ];
 
-function ChatbotPanel({ analysisResult, externalQuestion, onExternalQuestionHandled, variant = "panel", onClose }) {
-  const [messages, setMessages] = useState([
+function ChatbotPanel({
+  analysisResult,
+  externalQuestion,
+  onExternalQuestionHandled,
+  messages: controlledMessages,
+  onMessagesChange,
+  variant = "panel",
+  onClose,
+}) {
+  const [localMessages, setLocalMessages] = useState([
     {
       role: "assistant",
       text: "안녕하세요. 문서 분석 전에는 업로드 방법을, 분석 후에는 결과 해석과 다음 조치를 도와드릴게요.",
@@ -22,6 +30,8 @@ function ChatbotPanel({ analysisResult, externalQuestion, onExternalQuestionHand
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const messages = controlledMessages || localMessages;
+  const setMessages = onMessagesChange || setLocalMessages;
 
   const suggestedQuestions = useMemo(
     () => (analysisResult ? AFTER_ANALYSIS_QUESTIONS : BEFORE_ANALYSIS_QUESTIONS),

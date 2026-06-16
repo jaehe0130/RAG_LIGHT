@@ -7,17 +7,54 @@ import RiskResultCard from "./components/RiskResultCard.jsx";
 import UploadPanel from "./components/UploadPanel.jsx";
 
 const PROGRESS_STEP_COUNT = 5;
-const DEFAULT_DOC_TYPE = "terms";
+const INITIAL_CHAT_MESSAGES = [
+  {
+    role: "assistant",
+    text: "안녕하세요. 문서 분석 전에는 업로드 방법을, 분석 후에는 결과 해석과 다음 조치를 도와드릴게요.",
+  },
+];
+const STORAGE_KEYS = {
+  analysisResult: "rag-light-analysis-result",
+  chatMessages: "rag-light-chat-messages",
+  textInput: "rag-light-text-input",
+};
+
+function readStoredJson(key, fallback) {
+  try {
+    const value = window.sessionStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 function App() {
   const [view, setView] = useState("landing");
   const [selectedFile, setSelectedFile] = useState(null);
+  const [textInput, setTextInput] = useState(() => window.sessionStorage.getItem(STORAGE_KEYS.textInput) || "");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [progressIndex, setProgressIndex] = useState(0);
-  const [analysisResult, setAnalysisResult] = useState(null);
+  const [progressIndex, setProgressIndex] = useState(() => (window.sessionStorage.getItem(STORAGE_KEYS.textInput) ? 1 : 0));
+  const [analysisResult, setAnalysisResult] = useState(() => readStoredJson(STORAGE_KEYS.analysisResult, null));
   const [errorMessage, setErrorMessage] = useState("");
   const [chatQuestion, setChatQuestion] = useState("");
+  const [chatMessages, setChatMessages] = useState(() => readStoredJson(STORAGE_KEYS.chatMessages, INITIAL_CHAT_MESSAGES));
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(STORAGE_KEYS.textInput, textInput);
+  }, [textInput]);
+
+  useEffect(() => {
+    if (analysisResult) {
+      window.sessionStorage.setItem(STORAGE_KEYS.analysisResult, JSON.stringify(analysisResult));
+      return;
+    }
+    window.sessionStorage.removeItem(STORAGE_KEYS.analysisResult);
+  }, [analysisResult]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(STORAGE_KEYS.chatMessages, JSON.stringify(chatMessages));
+  }, [chatMessages]);
 
   useEffect(() => {
     if (!isAnalyzing) {
@@ -32,7 +69,7 @@ function App() {
   }, [isAnalyzing]);
 
   const handleAnalyze = async () => {
-    if (!selectedFile || isAnalyzing) {
+    if ((!selectedFile && !textInput.trim()) || isAnalyzing) {
       return;
     }
 
@@ -42,7 +79,7 @@ function App() {
     setAnalysisResult(null);
 
     try {
-      const apiResult = await analyzeDocument({ file: selectedFile, docType: DEFAULT_DOC_TYPE });
+      const apiResult = await analyzeDocument({ file: selectedFile, textInput });
       const viewModel = mapApiResultToViewModel(apiResult, selectedFile);
 
       setProgressIndex(PROGRESS_STEP_COUNT - 1);
@@ -64,6 +101,18 @@ function App() {
     setIsChatOpen(true);
   };
 
+  const isInitialChatState = (messages) =>
+    messages.length === INITIAL_CHAT_MESSAGES.length &&
+    messages.every((message, index) => message.role === INITIAL_CHAT_MESSAGES[index]?.role && message.text === INITIAL_CHAT_MESSAGES[index]?.text);
+
+  const resetAnalysisSession = () => {
+    setAnalysisResult(null);
+    setChatQuestion("");
+    setChatMessages(INITIAL_CHAT_MESSAGES);
+    window.sessionStorage.removeItem(STORAGE_KEYS.analysisResult);
+    window.sessionStorage.removeItem(STORAGE_KEYS.chatMessages);
+  };
+
   if (view === "landing") {
     return <LandingPage onStart={() => setView("analysis")} />;
   }
@@ -73,7 +122,7 @@ function App() {
       <header className="hero-header analysis-header">
         <div>
           <h1>소비자에게 불리할 수 있는 문구를 쉽고 정확하게 확인하세요</h1>
-          <p>약관, 광고 캡처, 계약서 이미지를 올리면 위험 문구를 찾아 신호등 판정과 다음 조치를 안내합니다.</p>
+          <p>파일 업로드나 직접 입력으로 위험 문구를 찾아 신호등 판정과 다음 조치를 안내합니다.</p>
         </div>
         <button type="button" className="ghost-action" onClick={() => setView("landing")}>
           서비스 소개로 돌아가기
@@ -85,35 +134,65 @@ function App() {
           <section className="top-grid">
             <UploadPanel
               selectedFile={selectedFile}
+              textInput={textInput}
               isAnalyzing={isAnalyzing}
               errorMessage={errorMessage}
               onFileChange={(file) => {
+                if (file !== selectedFile && (analysisResult || !isInitialChatState(chatMessages) || chatQuestion)) {
+                  resetAnalysisSession();
+                }
                 setSelectedFile(file);
-                setProgressIndex(file ? 1 : 0);
+                setProgressIndex(file || textInput.trim() ? 1 : 0);
                 setErrorMessage("");
+              }}
+              onTextChange={(value) => {
+                if (value !== textInput && (analysisResult || !isInitialChatState(chatMessages) || chatQuestion)) {
+                  resetAnalysisSession();
+                }
+                setTextInput(value);
+                setProgressIndex(selectedFile || value.trim() ? 1 : 0);
+                setErrorMessage("");
+              }}
+              onResetAll={() => {
+                setSelectedFile(null);
+                setTextInput("");
+                setProgressIndex(0);
+                setErrorMessage("");
+                setAnalysisResult(null);
+                setChatQuestion("");
+                setChatMessages(INITIAL_CHAT_MESSAGES);
+                window.sessionStorage.removeItem(STORAGE_KEYS.textInput);
+                window.sessionStorage.removeItem(STORAGE_KEYS.analysisResult);
+                window.sessionStorage.removeItem(STORAGE_KEYS.chatMessages);
               }}
               onAnalyze={handleAnalyze}
             />
 
-            <AnalysisProgress currentStepIndex={progressIndex} isAnalyzing={isAnalyzing} hasFile={Boolean(selectedFile)} />
+            <AnalysisProgress currentStepIndex={progressIndex} isAnalyzing={isAnalyzing} hasFile={Boolean(selectedFile || textInput.trim())} />
           </section>
 
           {analysisResult ? (
             <section className="results-area" aria-label="분석 결과">
               <RiskResultCard result={analysisResult} onAskQuestion={askChatbot} />
-              {analysisResult.report_form && <ReportForm reportText={analysisResult.report_form} />}
+              {analysisResult.report_form && <ReportForm reportText={analysisResult.report_form} result={analysisResult} />}
               <ResultDetails result={analysisResult} />
             </section>
           ) : (
             <section className="empty-result-panel">
               <h2>분석 결과가 여기에 표시됩니다</h2>
-              <p>문서를 업로드하고 “문서 분석하기”를 누르면 신호등 판정과 신고서 초안을 확인할 수 있습니다.</p>
+              <p>문서를 업로드하거나 텍스트를 입력한 뒤 “문서 분석하기”를 누르면 신호등 판정과 신고서 초안을 확인할 수 있습니다.</p>
             </section>
           )}
         </div>
 
         <aside className="chat-side">
-          <ChatbotPanel analysisResult={analysisResult} externalQuestion={chatQuestion} onExternalQuestionHandled={() => setChatQuestion("")} />
+          <ChatbotPanel
+            analysisResult={analysisResult}
+            externalQuestion={!isChatOpen ? chatQuestion : ""}
+            onExternalQuestionHandled={() => setChatQuestion("")}
+            messages={chatMessages}
+            onMessagesChange={setChatMessages}
+          />
         </aside>
       </main>
 
@@ -127,6 +206,8 @@ function App() {
             analysisResult={analysisResult}
             externalQuestion={chatQuestion}
             onExternalQuestionHandled={() => setChatQuestion("")}
+            messages={chatMessages}
+            onMessagesChange={setChatMessages}
             variant="modal"
             onClose={() => setIsChatOpen(false)}
           />
@@ -151,7 +232,7 @@ function LandingPage({ onStart }) {
             <h1>복잡한 약관과 광고 문구, 신호등처럼 쉽게 확인하세요</h1>
             <div className="landing-hero-summary">
               <p>
-                문서를 올리면 AI가 소비자에게 불리할 수 있는 표현을 찾아드립니다.
+                파일을 올리거나 문구를 붙여넣으면 AI가 소비자에게 불리할 수 있는 표현을 찾아드립니다.
               </p>
               <ul>
                 <li>안전·주의·위험 신호등으로 결과를 한눈에 확인</li>
@@ -213,8 +294,8 @@ function LandingPage({ onStart }) {
           <ol className="process-list">
             <li>
               <span>1</span>
-              <strong>문서 업로드</strong>
-              <p>약관, 계약서, 광고 캡처를 PDF·JPG·PNG로 올립니다.</p>
+              <strong>문서 업로드 또는 직접 입력</strong>
+              <p>약관, 계약서, 광고 캡처를 파일로 올리거나 텍스트로 붙여넣습니다.</p>
             </li>
             <li>
               <span>2</span>
@@ -317,6 +398,9 @@ function mapApiResultToViewModel(apiResult, file) {
     report_form: apiResult.report_form?.content || "",
     reference_cases: apiResult.reference_cases || [],
     status: apiResult.status || "",
+    inputType: apiResult.input_type || "",
+    violationType: analysis.violation_type || "",
+    recommended_forms: analysis.recommended_forms || [],
     fileName: file?.name || "",
   };
 }

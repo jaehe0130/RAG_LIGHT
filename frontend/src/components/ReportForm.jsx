@@ -2,17 +2,33 @@ import React, { useState } from "react";
 
 const REPORT_LINKS = [
   {
-    label: "공정위 홈페이지",
+    label: "공정위에 신고하기",
     href: "https://www.ftc.go.kr/www/index.do",
   },
   {
-    label: "국민신문고 홈페이지",
+    label: "국민신문고로 접수하기",
     href: "https://www.epeople.go.kr/index.jsp",
   },
 ];
 
-function ReportForm({ reportText }) {
+const DEFAULT_RECOMMENDED_FORMS = [
+  {
+    title: "공정거래위원회 신고서",
+    description: "추천 양식 정보가 아직 응답에 없을 때 사용할 수 있는 기본 신고 양식입니다.",
+    file: "/forms/form5.pdf",
+    reason: "백엔드 추천 양식이 없어서 기본 신고 양식을 표시합니다.",
+  },
+  {
+    title: "불공정약관 심사청구서",
+    description: "환불 불가, 과도한 위약금, 계약 해지 제한 등 약관 문제가 의심될 때 참고하세요.",
+    file: "/forms/form8.pdf",
+    reason: "약관·계약서 분석에서 가장 자주 연결되는 양식입니다.",
+  },
+];
+
+function ReportForm({ reportText, result }) {
   const [copyState, setCopyState] = useState("idle");
+  const recommendedForms = result?.recommended_forms?.length ? result.recommended_forms : DEFAULT_RECOMMENDED_FORMS;
 
   const handleCopy = async () => {
     try {
@@ -40,10 +56,8 @@ function ReportForm({ reportText }) {
     <section className="result-panel report-panel" aria-label="신고서 초안">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Report</p>
           <h2>신고서 초안</h2>
         </div>
-        <span className="danger-chip">문서 초안</span>
       </div>
 
       <textarea readOnly value={reportText} aria-label="신고서 초안 내용" />
@@ -56,6 +70,32 @@ function ReportForm({ reportText }) {
           PDF 다운로드
         </button>
       </div>
+
+      <section className="recommended-form-section" aria-label="추천 신고 양식">
+        <div className="recommended-form-heading">
+          <h3>추천 신고 양식</h3>
+          <p>아래 양식을 열어 내용을 확인한 뒤 필요한 항목을 채워 제출할 수 있습니다.</p>
+        </div>
+        <div className="recommended-form-grid">
+          {recommendedForms.map((form) => (
+            <article key={`${form.title}-${form.file}`} className="recommended-form-card">
+              <div>
+                <h4>{form.title}</h4>
+                {form.reason && <strong>{form.reason}</strong>}
+                <p>{form.description}</p>
+              </div>
+              <div className="recommended-form-actions">
+                <a href={form.file} target="_blank" rel="noreferrer">
+                  미리보기
+                </a>
+                <a href={form.file} download>
+                  다운로드
+                </a>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <div className="report-link-box" aria-label="신고서 제출 홈페이지 바로가기">
         <span>신고서 제출 바로가기</span>
