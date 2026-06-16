@@ -174,8 +174,20 @@ function App() {
           {analysisResult ? (
             <section className="results-area" aria-label="분석 결과">
               <RiskResultCard result={analysisResult} onAskQuestion={askChatbot} />
-              {analysisResult.report_form && <ReportForm reportText={analysisResult.report_form} result={analysisResult} />}
-              <ResultDetails result={analysisResult} />
+              {isSafeResult(analysisResult) ? (
+                <SafeResultGuide />
+              ) : isWarningResult(analysisResult) ? (
+                <>
+                  <WarningResultGuide />
+                  {analysisResult.report_form && <WarningReviewMemo reportText={analysisResult.report_form} result={analysisResult} />}
+                  <WarningResultDetails result={analysisResult} />
+                </>
+              ) : (
+                <>
+                  {analysisResult.report_form && <ReportForm reportText={analysisResult.report_form} result={analysisResult} />}
+                  <ResultDetails result={analysisResult} />
+                </>
+              )}
             </section>
           ) : (
             <section className="empty-result-panel">
@@ -365,7 +377,9 @@ function LandingPage({ onStart }) {
   );
 }
 
-function ResultDetails({ result }) {
+function ResultDetails({ result, tone = "danger" }) {
+  const isWarning = tone === "warning";
+
   return (
     <section className="result-details" aria-label="참고 사례">
       <div className="detail-card">
@@ -391,6 +405,140 @@ function ResultDetails({ result }) {
   );
 }
 
+function WarningResultGuide() {
+  return (
+    <section className="warning-result-guide" aria-label="주의 판정 다음 조치">
+      <div>
+        <h2>바로 신고하기 전에 한 번 더 확인해보면 좋아요</h2>
+        <p>
+          주의 판정은 위험 가능성이 있는 표현이 발견됐다는 의미입니다. 먼저 문제 문구를 확인하고, 사업자에게 조건을 명확히 물어본 뒤 필요하면 신고 자료로 정리하세요.
+        </p>
+      </div>
+      <ul>
+        <li>환불, 해지, 위약금, 효과 보장처럼 실제 피해로 이어질 수 있는 문구를 우선 확인하세요.</li>
+        <li>아직 피해가 발생하지 않았다면 신고서 대신 검토 메모로 보관하는 편이 부담이 적습니다.</li>
+        <li>같은 조건으로 결제했거나 거절당한 기록이 있으면 캡처와 영수증을 함께 모아두세요.</li>
+      </ul>
+    </section>
+  );
+}
+
+function WarningReviewMemo({ reportText, result }) {
+  const [copyState, setCopyState] = useState("idle");
+  const [memoText, setMemoText] = useState("");
+  const forms = result.recommended_forms || [];
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(memoText);
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 1800);
+    } catch {
+      setCopyState("failed");
+    }
+  };
+
+  return (
+    <section className="result-panel warning-review-memo" aria-label="주의 판정 검토 메모">
+      <div className="panel-heading">
+        <div>
+          <h2>검토 메모</h2>
+          <p>신고서로 바로 제출하기보다, 주의 문구와 확인할 내용을 보관하는 용도입니다.</p>
+        </div>
+      </div>
+
+      <textarea
+        value={memoText}
+        onChange={(event) => setMemoText(event.target.value)}
+        placeholder="확인할 문구, 사업자에게 물어볼 내용, 결제/환불/해지 조건 등을 자유롭게 적어보세요."
+        aria-label="주의 판정 검토 메모 내용"
+      />
+
+      <div className="button-row">
+        <button type="button" onClick={handleCopy}>
+          메모 복사하기
+        </button>
+      </div>
+
+      {forms.length > 0 && (
+        <section className="recommended-form-section" aria-label="필요 시 참고할 신고 양식">
+          <div className="recommended-form-heading">
+            <h3>필요 시 참고할 신고 양식</h3>
+            <p>문구를 다시 확인한 뒤 실제 피해나 거절 기록이 있을 때 참고할 수 있는 양식입니다.</p>
+          </div>
+          <div className="recommended-form-grid">
+            {forms.slice(0, 2).map((form) => (
+              <article key={`${form.title}-${form.file}`} className="recommended-form-card">
+                <div>
+                  <h4>{form.title}</h4>
+                  {form.reason && <strong>{form.reason}</strong>}
+                  <p>{form.description}</p>
+                </div>
+                <div className="recommended-form-actions">
+                  <a href={form.file} target="_blank" rel="noreferrer" className="preview-action">
+                    미리보기
+                  </a>
+                  <a href={form.file} download>
+                    다운로드
+                  </a>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {copyState === "copied" && <p className="feedback success">메모를 복사했습니다.</p>}
+      {copyState === "failed" && <p className="feedback">클립보드 복사에 실패했습니다.</p>}
+    </section>
+  );
+}
+
+function WarningResultDetails({ result }) {
+  return (
+    <section className="result-details" aria-label="주의 판정 참고 사례">
+      <div className="detail-card">
+        <h2>비슷한 사례 참고</h2>
+        <p className="case-helper">바로 신고하기보다, 어떤 유형의 사례와 가까운지 참고해서 문구를 다시 확인해보세요.</p>
+        {result.reference_cases.length > 0 ? (
+          <ul className="case-list">
+            {result.reference_cases.slice(0, 2).map((caseText, index) => (
+              <li key={`${index}-${caseText.slice(0, 24)}`}>
+                <span>참고 {index + 1}</span>
+                <p className="case-summary">유사 사례 전문은 아래에서 펼쳐 확인할 수 있습니다.</p>
+                <details className="case-detail">
+                  <summary>내용 펼쳐보기</summary>
+                  <p>{caseText}</p>
+                </details>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>아직 표시할 유사 사례가 없습니다.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SafeResultGuide() {
+  return (
+    <section className="safe-result-guide" aria-label="안전 판정 다음 조치">
+      <div>
+        <h2>신고 준비가 필요하지 않은 상태로 보여요</h2>
+        <p>
+          현재 분석에서는 뚜렷한 위험 문구가 확인되지 않았습니다. 신고 양식 대신 문서를 보관하고, 계약 전 최종 조건만 다시 확인해보세요.
+        </p>
+      </div>
+      <ul>
+        <li>결제 금액, 환불 조건, 해지 방법처럼 실제 이용에 영향을 주는 항목을 한 번 더 확인하세요.</li>
+        <li>추가 문구나 새 광고 이미지가 생기면 다시 분석해 비교해볼 수 있습니다.</li>
+        <li>불안한 표현이 있다면 챗봇에 해당 문장을 붙여 넣고 의미를 물어보세요.</li>
+      </ul>
+    </section>
+  );
+}
+
 function mapApiResultToViewModel(apiResult, file) {
   const analysis = apiResult.analysis || {};
   const signal = normalizeSignal(analysis.signal_color);
@@ -410,6 +558,14 @@ function mapApiResultToViewModel(apiResult, file) {
     recommended_forms: analysis.recommended_forms || [],
     fileName: file?.name || "",
   };
+}
+
+function isSafeResult(result) {
+  return normalizeSignal(result?.signal) === "GREEN";
+}
+
+function isWarningResult(result) {
+  return normalizeSignal(result?.signal) === "YELLOW";
 }
 
 function normalizeSignal(signal) {

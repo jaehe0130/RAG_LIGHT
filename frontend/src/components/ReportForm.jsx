@@ -60,6 +60,24 @@ function ReportForm({ reportText, result }) {
         </div>
       </div>
 
+      <div className="report-ready-steps" aria-label="신고 준비 체크">
+        <div>
+          <span>1</span>
+          <strong>문제 문구 확인</strong>
+          <p>위험하다고 표시된 표현을 먼저 확인하세요.</p>
+        </div>
+        <div>
+          <span>2</span>
+          <strong>자료 보관</strong>
+          <p>계약서, 광고 화면, 결제 기록을 함께 모아두세요.</p>
+        </div>
+        <div>
+          <span>3</span>
+          <strong>초안 활용</strong>
+          <p>아래 내용을 복사해 필요한 부분만 보완하세요.</p>
+        </div>
+      </div>
+
       <textarea readOnly value={reportText} aria-label="신고서 초안 내용" />
 
       <div className="button-row">
