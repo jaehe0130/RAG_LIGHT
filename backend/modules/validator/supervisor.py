@@ -72,9 +72,17 @@ def check_discrepancy(result: dict, override_reasons: list) -> bool:
     if not override_reasons:
         return False
     
-    if result.get("signal_color") != "RED":
+    # 1. 만약 검출된 정량 규칙 중 RED severity가 존재하는데, 최종 판정이 RED가 아니라면 모순입니다.
+    has_red = any(r.get("severity", "RED") == "RED" for r in override_reasons)
+    if has_red and result.get("signal_color") != "RED":
         return True
         
+    # 2. 만약 검출된 정량 규칙에 YELLOW severity가 존재하는데, 최종 판정이 GREEN이라면 모순입니다 (YELLOW나 RED여야 함).
+    has_yellow = any(r.get("severity", "RED") == "YELLOW" for r in override_reasons)
+    if has_yellow and result.get("signal_color") == "GREEN":
+        return True
+        
+    # 3. 또한 정량 검증기에서 잡은 위반 조항들이 LLM의 toxic_clauses에 정상 매핑되어 있는지 확인합니다.
     llm_clauses = result.get("toxic_clauses", [])
     for item in override_reasons:
         found = False
@@ -108,11 +116,15 @@ def consensus_supervisor_node(state: dict) -> dict:
     if discrepancy and correction_count < 1 and api_key:
         critique_items = []
         for item in audit_report:
-            critique_items.append(f"- 위반 조항: {item['clause']}\n  이유: {item['reason']}")
+            critique_items.append(f"- 위반 조항: {item['clause']}\n  이유: {item['reason']} (등급: {item.get('severity', 'RED')})")
+        
+        has_red = any(r.get("severity", "RED") == "RED" for r in audit_report)
+        target_color = "RED" if has_red else "YELLOW"
+        
         feedback_message = (
             "정량 검증기에서 다음 위반 사항이 탐지되었습니다. 이전 분석 결과에 이 항목들이 누락되었거나 판정이 잘못되었습니다.\n\n"
             + "\n".join(critique_items)
-            + "\n\n이 피드백을 반영하여 반드시 signal_color를 RED로 보정하고, 해당 독소 조항을 toxic_clauses에 추가하여 다시 제출해 주세요."
+            + f"\n\n이 피드백을 반영하여 반드시 signal_color를 {target_color}로 보정하고, 해당 독소 조항을 toxic_clauses에 추가하여 다시 제출해 주세요."
         )
         print(f"  └─ [조정] 1차 분석과 정량 검증 결과 불일치. 피드백 루프 작동 (보정 횟수: {correction_count + 1})")
         return {
@@ -130,9 +142,18 @@ def consensus_supervisor_node(state: dict) -> dict:
     
     apply_fallback_override = False
     if final_override_reasons:
-        if final_result["signal_color"] != "RED":
-            apply_fallback_override = True
+        has_red = any(r.get("severity", "RED") == "RED" for r in final_override_reasons)
+        if has_red:
+            # RED 규칙이 존재하는데 최종 판정이 RED가 아니면 오버라이드 대상
+            if final_result["signal_color"] != "RED":
+                apply_fallback_override = True
         else:
+            # YELLOW 규칙만 존재하는데 최종 판정이 GREEN이면 오버라이드 대상 (YELLOW로 상향 필요)
+            if final_result["signal_color"] == "GREEN":
+                apply_fallback_override = True
+                
+        # 매핑 검사 추가
+        if not apply_fallback_override:
             llm_clauses = final_result.get("toxic_clauses", [])
             for item in final_override_reasons:
                 found = False
@@ -146,7 +167,14 @@ def consensus_supervisor_node(state: dict) -> dict:
 
     if apply_fallback_override and final_override_reasons:
         print("  └─ [조정] 최종 안전장치 작동: 미반영된 정량적 규칙 위반 사항을 결과에 강제 주입합니다.")
-        final_result["signal_color"] = "RED"
+        has_red = any(r.get("severity", "RED") == "RED" for r in final_override_reasons)
+        
+        if has_red:
+            final_result["signal_color"] = "RED"
+        else:
+            # RED가 없고 YELLOW만 존재할 때, LLM의 기존 판정이 RED가 아니었다면 YELLOW로 오버라이드
+            if final_result["signal_color"] != "RED":
+                final_result["signal_color"] = "YELLOW"
         
         for reason_item in final_override_reasons:
             exists = False
@@ -155,14 +183,18 @@ def consensus_supervisor_node(state: dict) -> dict:
                     exists = True
                     break
             if not exists:
-                final_result["toxic_clauses"].append(reason_item)
+                final_result["toxic_clauses"].append({
+                    "clause": reason_item["clause"],
+                    "reason": reason_item["reason"]
+                })
                 
         reasons_summary = ", ".join([f"'{r['clause']}'" for r in final_override_reasons])
         original_analysis = final_result.get("llm_analysis", "").strip()
         
+        color_desc = "위험(RED)" if has_red else "주의(YELLOW)"
         if not original_analysis or "위반 조항이 검출되지 않았습니다" in original_analysis:
             final_result["llm_analysis"] = (
-                f"[정량 검증 위반 발견] 본 문서에서 명백한 법률 위반 기준({reasons_summary})이 감지되어 강제 RED 판정되었습니다. "
+                f"[정량 검증 위반 발견] 본 문서에서 명백한 법률 위반 기준({reasons_summary})이 감지되어 강제 {color_desc} 판정되었습니다. "
                 f"자세한 위법성 여부는 아래에 탐지된 독소 조항과 상세 법적 근거를 확인해 주세요."
             )
         else:

@@ -50,8 +50,8 @@ class LegalAnalyst:
         elif classified_type == "AD_FOMO":
             return base_instruction + (
                 "## [쇼핑몰 마감 임박 및 선착순 광고 검토 기준]\n"
-                "1. '오늘 단 하루', '선착순 10명', '마지막 기회' 등 합리적 근거 없이 소비자의 심리를 조작하여 충동구매를 유도하는 다크패턴 기만 광고는 무조건 RED (전자상거래법 제21조 제1항 제1호 및 표시광고법 제3조 위반)\n"
-                "※ 발견한 모든 마감 압박성 표현을 `toxic_clauses` 리스트에 기재하고, 판정 색상(signal_color)을 RED로 지정해 주세요."
+                "1. '오늘 단 하루', '선착순 10명', '마지막 기회' 등 합리적 근거 없이 소비자의 심리를 조작하여 충동구매를 유도하는 다크패턴 기만 광고는 YELLOW (주의)로 지정해 주세요 (계약 자체의 무효 사유는 아니지만, 소비자의 합리적 구매 의사결정을 왜곡하므로).\n"
+                "※ 발견한 모든 마감 압박성 표현을 `toxic_clauses` 리스트에 기재하고, 판정 색상(signal_color)을 YELLOW로 지정해 주세요."
             )
         else:
             return base_instruction + (
