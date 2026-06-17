@@ -11,7 +11,7 @@ from langgraph.graph import END, StateGraph
 from models import AgentState, AnalysisResponse, ChatRequest, ChatResponse
 from modules.ocr import extract_text, is_supported_upload, run_ocr_node
 from modules.rag_search import search_rag_node
-from modules.rule_validator import validate_rules_node, classifier_node
+from modules.rule_validator import validate_rules_node
 from modules.chat_agent import generate_chat_response, call_chat_llm
 from modules.templates import FORM_TEMPLATES
 
@@ -89,15 +89,12 @@ def ocr_node_wrapper(state: AgentState) -> dict:
 workflow = StateGraph(AgentState)
 workflow.add_node("ocr", ocr_node_wrapper)
 workflow.add_node("rag", search_rag_node)
-workflow.add_node("classifier", classifier_node)
 workflow.add_node("validate", validate_rules_node)
 workflow.add_node("report", report_generation_node)
 
 workflow.set_entry_point("ocr")
 workflow.add_edge("ocr", "rag")
-workflow.add_edge("ocr", "classifier")
 workflow.add_edge("rag", "validate")
-workflow.add_edge("classifier", "validate")
 workflow.add_edge("validate", "report")
 workflow.add_edge("report", END)
 
@@ -152,13 +149,12 @@ async def analyze_contract(
         "toxic_clauses": [],
         "signal_color": "",
         "report_draft": "",
-        "classified_type": "",
     }
     print("\n" + "="*50)
     print("[Pipeline Start] 분석 파이프라인 시작...")
     pipeline_t0 = time.time()
     
-    final_output = await compiled_graph.ainvoke(initial_state)
+    final_output = compiled_graph.invoke(initial_state)
 
     print(f"\n[Pipeline End] ✨ 전체 분석 파이프라인 총 소요 시간: {time.time() - pipeline_t0:.2f}초")
     print("="*50 + "\n")

@@ -3,8 +3,8 @@ This module serves as the backwards-compatible entry point for rule validation,
 delegating the actual implementation to the modular modules.validator package.
 """
 
-from modules.validator.subgraph import validate_rules_node, classifier_node
-from modules.validator.classifier import ClassifierAgent
+from modules.validator.subgraph import validate_rules_node
+from modules.validator.classifier import ClassifierAgent, classifier_node
 from modules.validator.auditor import (
     parse_korean_number_to_int,
     extract_penalty_percentages,

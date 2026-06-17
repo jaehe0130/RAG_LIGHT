@@ -15,7 +15,6 @@ class AgentState(TypedDict):
     signal_color: str             # ● 안전 / ● 주의 / ● 위험 최종 라벨
     
     report_draft: str             # 관공서 양식에 맞춘 신고서 초안 텍스트
-    classified_type: str          # 분류 에이전트가 분류한 문서 카테고리 (SPORTS, ECOMMERCE 등)
 
 # 2. React 프론트엔드가 바로 화면에 뿌릴 수 있도록 서빙하는 최종 API 응답 포맷
 class AnalysisResponse(BaseModel):
