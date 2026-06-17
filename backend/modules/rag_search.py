@@ -91,11 +91,33 @@ def _summarize_cases(query: str, docs: list[str]) -> list[str]:
     return docs
 
 
+_KEY_SENTENCES_KEYWORDS = [
+    "위약금", "환불", "해지", "청약철회", "손해배상", "면책", "책임", "환급", "취소",
+    "과장", "허위", "보장", "효능", "한정", "선착순",
+]
+
+
+def extract_key_sentences(text: str, max_chars: int = 500) -> str:
+    if len(text) <= max_chars:
+        return text
+
+    sentences = [s.strip() for s in text.replace("。", ".").split(".") if s.strip()]
+    matched = [s for s in sentences if any(kw in s for kw in _KEY_SENTENCES_KEYWORDS)]
+
+    if not matched:
+        return text[:max_chars]
+
+    result = ". ".join(matched)
+    return result[:max_chars]
+
+
 def retrieve_similar_cases(query: str, top_k: int = RERANK_TOP_K, retrieve_k: int = RETRIEVE_K) -> list[str]:
     """공정위 및 소비자원 DB에서 쿼리와 유사한 사례를 검색하고 Reranking하여 반환합니다."""
     if not query.strip():
         print("[RAG] 검색 쿼리가 비어있어 검색을 건너뜁니다.")
         return []
+
+    query = extract_key_sentences(query)
 
     print("[RAG] 🔍 1/3 질문 임베딩(벡터화) 진행 중...")
     t0 = time.time()
