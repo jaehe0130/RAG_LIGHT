@@ -155,7 +155,8 @@ def run_quantitative_checks(raw_text: str, doc_type: str) -> list:
         if any(kw in raw_text for kw in forbidden_keywords):
             override_reasons.append({
                 "clause": "환불/취소 절대 불가 조항",
-                "reason": "약관법 제6조 및 전자상거래법 제17조에 따라 청약철회/해지 권리를 원천 박탈하는 면책 약관은 강행규정 위반으로 무효(RED)입니다."
+                "reason": "약관법 제6조 및 전자상거래법 제17조에 따라 청약철회/해지 권리를 원천 박탈하는 면책 약관은 강행규정 위반으로 무효(RED)입니다.",
+                "severity": "RED"
             })
 
     # 2. SPORTS (체육시설업 고시 위약금 한도 10% 및 양도 수수료 3만원 한도 검증)
@@ -164,14 +165,16 @@ def run_quantitative_checks(raw_text: str, doc_type: str) -> list:
         if penalty_pcts and max(penalty_pcts) > 10:
             override_reasons.append({
                 "clause": f"위약금/수수료 {max(penalty_pcts)}% 규정",
-                "reason": f"소비자분쟁해결기준(체육시설업 고시)에 명시된 위약금 법수한도(10%)를 초과하는 {max(penalty_pcts)}%의 위약금을 규정하여 약관법 제8조에 따라 무효에 해당합니다."
+                "reason": f"소비자분쟁해결기준(체육시설업 고시)에 명시된 위약금 법수한도(10%)를 초과하는 {max(penalty_pcts)}%의 위약금을 규정하여 약관법 제8조에 따라 무효에 해당합니다.",
+                "severity": "RED"
             })
         
         transfer_amounts = extract_krw_amount(raw_text)
         if transfer_amounts and max(transfer_amounts) > 30000:
             override_reasons.append({
                 "clause": f"양도 수수료 {max(transfer_amounts):,}원 조항",
-                "reason": f"회원권 양도 대행 및 명의변경 수수료가 합리적인 실비 기준(정액 3만 원)을 초과하는 {max(transfer_amounts):,}원으로 명시되어 부당한 고객 불이익 조항(RED)에 해당합니다."
+                "reason": f"회원권 양도 대행 및 명의변경 수수료가 합리적인 실비 기준(정액 3만 원)을 초과하는 {max(transfer_amounts):,}원으로 명시되어 부당한 고객 불이익 조항(RED)에 해당합니다.",
+                "severity": "RED"
             })
 
     # 3. ECOMMERCE (전자상거래법상 7일 청약철회 기한 및 포장 단순개봉 환불 보장 검증)
@@ -180,13 +183,15 @@ def run_quantitative_checks(raw_text: str, doc_type: str) -> list:
         if refund_days and min(refund_days) < 7:
             override_reasons.append({
                 "clause": f"청약철회 기간 {min(refund_days)}일 제한 조항",
-                "reason": f"전자상거래법 제17조에 따른 법정 단순 변심 청약철회 보장 기간(7일)을 무단으로 단축하는 {min(refund_days)}일 취소 제한 규정으로 무효(RED)입니다."
+                "reason": f"전자상거래법 제17조에 따른 법정 단순 변심 청약철회 보장 기간(7일)을 무단으로 단축하는 {min(refund_days)}일 취소 제한 규정으로 무효(RED)입니다.",
+                "severity": "RED"
             })
             
         if any(w in raw_text for w in ("개봉 시 환불", "박스 훼손 시", "비닐 제거 시")):
             override_reasons.append({
                 "clause": "단순 포장 개봉 시 환불 불가 조항",
-                "reason": "전자상거래법 제17조 제2항에 의거, 상품 가치가 완전히 멸실되지 않고 단순히 내용물 확인을 위해 포장을 개봉한 경우 청약철회가 가능하므로 위법한 면책 조항(RED)입니다."
+                "reason": "전자상거래법 제17조 제2항에 의거, 상품 가치가 완전히 멸실되지 않고 단순히 내용물 확인을 위해 포장을 개봉한 경우 청약철회가 가능하므로 위법한 면책 조항(RED)입니다.",
+                "severity": "RED"
             })
 
     # 4. AD_DIET (표시광고법상 단정적 안전성 광고 검증)
@@ -195,7 +200,8 @@ def run_quantitative_checks(raw_text: str, doc_type: str) -> list:
         if any(w in raw_text for w in fomo_words):
             override_reasons.append({
                 "clause": "부작용 없음 확정적 문구",
-                "reason": "표시광고법 제3조에 의거하여 의학적/객관적 근거 없이 안전성을 100% 단정 짓는 기만적 과장 광고 행위(RED)에 해당합니다."
+                "reason": "표시광고법 제3조에 의거하여 의학적/객관적 근거 없이 안전성을 100% 단정 짓는 기만적 과장 광고 행위(RED)에 해당합니다.",
+                "severity": "RED"
             })
 
     # 5. AD_FOMO (전자상거래법상 기만적 소비자 유인 다크패턴 기법 검출)
@@ -209,7 +215,8 @@ def run_quantitative_checks(raw_text: str, doc_type: str) -> list:
         if detected_words:
             override_reasons.append({
                 "clause": f"마감 압박 및 선착순 기만 표현 감지 ({', '.join(detected_words)})",
-                "reason": "전자상거래법 제21조 제1항 제1호(기만적 방법을 사용하여 소비자를 유인) 및 표시광고법 제3조에 의거하여, 합리적인 근거 없이 소비자의 불안이나 충동구매를 유도하는 마감 임박 및 선착순 기만 광고 조항(RED)에 해당합니다."
+                "reason": "전자상거래법 제21조 제1항 제1호(기만적 방법을 사용하여 소비자를 유인) 및 표시광고법 제3조에 의거하여, 합리적인 근거 없이 소비자의 불안이나 충동구매를 유도하는 마감 임박 및 선착순 기만 광고 조항(YELLOW)에 해당합니다.",
+                "severity": "YELLOW"
             })
 
     return override_reasons
