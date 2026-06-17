@@ -97,7 +97,7 @@ function App() {
   };
 
   const askChatbot = (question) => {
-    setChatQuestion(question);
+    setChatQuestion({ id: Date.now(), text: question });
     setIsChatOpen(true);
   };
 
@@ -392,7 +392,7 @@ function ResultDetails({ result, tone = "danger" }) {
                 <p className="case-summary">관련 사례 전문은 아래에서 펼쳐 확인할 수 있습니다.</p>
                 <details className="case-detail">
                   <summary>사례 내용 보기</summary>
-                  <p>{caseText}</p>
+                  <CaseTextBlock text={caseText} />
                 </details>
               </li>
             ))}
@@ -403,6 +403,46 @@ function ResultDetails({ result, tone = "danger" }) {
       </div>
     </section>
   );
+}
+
+function CaseTextBlock({ text }) {
+  const paragraphs = formatCaseText(text);
+
+  return (
+    <div className="case-text-block">
+      {paragraphs.map((paragraph, index) => (
+        <p key={`${index}-${paragraph.slice(0, 18)}`}>{paragraph}</p>
+      ))}
+    </div>
+  );
+}
+
+function formatCaseText(text) {
+  const normalizedText = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  if (!normalizedText) {
+    return [];
+  }
+
+  const lineBasedParagraphs = normalizedText
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lineBasedParagraphs.length > 1) {
+    return lineBasedParagraphs;
+  }
+
+  return normalizedText
+    .replace(/([.!?])\s+(?=[가-힣A-Z0-9])/g, "$1\n")
+    .replace(/(다\.|요\.|니다\.)\s+(?=[가-힣A-Z0-9])/g, "$1\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function WarningResultGuide() {
@@ -508,7 +548,7 @@ function WarningResultDetails({ result }) {
                 <p className="case-summary">유사 사례 전문은 아래에서 펼쳐 확인할 수 있습니다.</p>
                 <details className="case-detail">
                   <summary>내용 펼쳐보기</summary>
-                  <p>{caseText}</p>
+                  <CaseTextBlock text={caseText} />
                 </details>
               </li>
             ))}

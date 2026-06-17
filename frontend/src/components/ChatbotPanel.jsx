@@ -30,6 +30,7 @@ function ChatbotPanel({
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const handledExternalQuestionIdRef = useRef(null);
   const messages = controlledMessages || localMessages;
   const setMessages = onMessagesChange || setLocalMessages;
 
@@ -44,7 +45,13 @@ function ChatbotPanel({
 
   useEffect(() => {
     if (externalQuestion) {
-      handleAsk(externalQuestion);
+      const questionText = typeof externalQuestion === "string" ? externalQuestion : externalQuestion.text;
+      const questionId = typeof externalQuestion === "string" ? questionText : externalQuestion.id;
+      if (questionId && handledExternalQuestionIdRef.current === questionId) {
+        return;
+      }
+      handledExternalQuestionIdRef.current = questionId;
+      handleAsk(questionText);
       onExternalQuestionHandled?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,7 +102,7 @@ function ChatbotPanel({
       <div className="chat-messages" aria-live="polite">
         {messages.map((message, index) => (
           <div key={message.id || `${message.role}-${index}`} className={`chat-message ${message.role} ${message.isPending ? "is-loading" : ""}`}>
-            <p>{message.text}</p>
+            <p>{formatChatText(message.text)}</p>
           </div>
         ))}
         {false && (
@@ -123,6 +130,19 @@ function ChatbotPanel({
       </form>
     </section>
   );
+}
+
+function formatChatText(text) {
+  const normalizedText = String(text || "").trim();
+  if (!normalizedText || normalizedText.includes("\n")) {
+    return normalizedText;
+  }
+
+  return normalizedText
+    .replace(/([.!?])\s+(?=[가-힣A-Z0-9])/g, "$1\n")
+    .replace(/(다\.|요\.|니다\.)\s+(?=[가-힣A-Z0-9])/g, "$1\n")
+    .replace(/\s+(-\s)/g, "\n$1")
+    .replace(/\s+(\d+\.\s)/g, "\n$1");
 }
 
 export default ChatbotPanel;
