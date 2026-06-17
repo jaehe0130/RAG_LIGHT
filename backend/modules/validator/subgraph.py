@@ -113,14 +113,12 @@ def route_after_supervisor(state: SubgraphState):
 subgraph_workflow = StateGraph(SubgraphState)
 
 # 노드 등록
-subgraph_workflow.add_node("classifier", classifier_node)
 subgraph_workflow.add_node("auditor", rule_auditor_node)
 subgraph_workflow.add_node("analyst", legal_analyst_node)
 subgraph_workflow.add_node("supervisor", consensus_supervisor_node)
 
 # 순차 워크플로우 엣지 구성
-subgraph_workflow.set_entry_point("classifier")
-subgraph_workflow.add_edge("classifier", "auditor")
+subgraph_workflow.set_entry_point("auditor")
 subgraph_workflow.add_edge("auditor", "analyst")
 subgraph_workflow.add_edge("analyst", "supervisor")
 
@@ -148,7 +146,7 @@ def validate_rules_node(state: dict) -> dict:
         "retrieved_docs": state.get("retrieved_docs", []),
         "retrieved_ftc_docs": state.get("retrieved_ftc_docs", []),
         "retrieved_kca_docs": state.get("retrieved_kca_docs", []),
-        "classified_type": "OTHER",
+        "classified_type": state.get("classified_type", "OTHER"),
         "audit_report": [],
         "llm_analysis": "",
         "toxic_clauses": [],
