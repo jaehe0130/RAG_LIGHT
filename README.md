@@ -85,11 +85,15 @@ RAG_light/
 ### 🔍 팀원 C (이예경) : 데이터베이스 검색(RAG) 엔진 구현
 > **주 사용 언어**: `Python`  
 > **전담 작업 공간**: `backend/modules/rag_search.py` (검색용), `backend/data/ingest_qdrant.py` (데이터 적재용)
-* **Qdrant 초기 데이터 적재 (Ingestion)**: 
-  - 원본 JSON 파일을 임베딩(Embedding) 처리 후 Qdrant DB에 초기 적재하는 파이프라인 코드 작성
-  - 의미 기반 청킹(Semantic Chunking) 및 메타데이터(사건번호 등) 분리 적재 필수
-* **다중 지식베이스 연동**: 공정위 의결서 DB 및 소비자원 상담 DB 등 Qdrant 연동 
-* **하이브리드 검색**: 문서별 BM25(키워드 기반) + Dense(의미 기반) 병렬 검색으로 가장 유사한 판례 추출 기능 구현
+* **Qdrant 초기 데이터 적재 (Ingestion)**:
+  - 원본 JSON 파일(`raw/` 폴더)을 `intfloat/multilingual-e5-large-instruct` 임베딩 모델로 벡터화 후 Qdrant 로컬 DB에 적재
+  - `ftc_decisions`(공정위 의결서), `kca_cases`(소비자원 피해구제) 2개 컬렉션 분리 운영
+  - UUID5 기반 결정론적 ID로 중복 적재 방지
+* **다중 지식베이스 Dense 검색 + Reranking**:
+  - 두 컬렉션에서 각각 후보 추출 후 `BAAI/bge-reranker-v2-m3` CrossEncoder로 통합 재정렬
+  - LLM Query Rewriting: Gemini API로 OCR 텍스트에서 핵심 법률 쟁점을 압축한 검색 쿼리 생성 (실패 시 키워드 기반 문장 추출 fallback)
+* **검색 결과 후처리**:
+  - `_summarize_cases`: 딱딱한 법률 문체의 검색 결과를 LLM으로 소비자 친화적 말투로 변환하여 프론트엔드에 전달
 
 ---
 
