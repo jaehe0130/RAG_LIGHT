@@ -1,13 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { sendChatMessage } from "../api/chatClient.js";
 import SuggestedQuestionChips from "./SuggestedQuestionChips.jsx";
 
 const BEFORE_ANALYSIS_QUESTIONS = ["무엇을 넣으면 되나요?", "광고 캡처 분석 가능?", "개인정보 저장되나요?", "분석 기준은 뭔가요?"];
 
 const AFTER_ANALYSIS_QUESTIONS = [
-  "왜 이런 판정인가요?",
   "문제 문구만 다시 보여줘",
-  "소비자가 할 수 있는 조치는?",
+  "준비할 증거 알려줘",
   "신고서 초안 작성해줘",
   "관련 기관 알려줘",
 ];
@@ -29,8 +28,12 @@ function ChatbotPanel({
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const chatMessagesRef = useRef(null);
+  const latestUserMessageRef = useRef(null);
   const handledExternalQuestionIdRef = useRef(null);
+  const preserveScrollRef = useRef(false);
+  const preservedScrollTopRef = useRef(0);
   const messages = controlledMessages || localMessages;
   const setMessages = onMessagesChange || setLocalMessages;
 
@@ -39,9 +42,32 @@ function ChatbotPanel({
     [analysisResult],
   );
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  useLayoutEffect(() => {
+    const chatMessagesElement = chatMessagesRef.current;
+    if (!chatMessagesElement) {
+      return;
+    }
+
+    if (preserveScrollRef.current) {
+      chatMessagesElement.scrollTop = preservedScrollTopRef.current;
+      return;
+    }
+
+    if (latestUserMessageRef.current) {
+      chatMessagesElement.scrollTop = latestUserMessageRef.current.offsetTop - chatMessagesElement.offsetTop;
+    }
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    if (!inputRef.current) {
+      return;
+    }
+    inputRef.current.style.height = "auto";
+    const maxHeight = 68;
+    const nextHeight = Math.min(inputRef.current.scrollHeight, maxHeight);
+    inputRef.current.style.height = `${nextHeight}px`;
+    inputRef.current.style.overflowY = inputRef.current.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [inputValue]);
 
   useEffect(() => {
     if (externalQuestion) {
@@ -67,7 +93,13 @@ function ChatbotPanel({
     handleAsk(question);
   };
 
-  const handleAsk = async (question) => {
+  const handleAsk = async (question, options = {}) => {
+    const preserveScroll = Boolean(options.preserveScroll);
+    preserveScrollRef.current = preserveScroll;
+    if (preserveScroll) {
+      preservedScrollTopRef.current = chatMessagesRef.current?.scrollTop ?? 0;
+    }
+
     const pendingId = `pending-${Date.now()}`;
     const currentMessages = [...messages, { role: "user", text: question }];
     setMessages((current) => [
@@ -86,6 +118,8 @@ function ChatbotPanel({
     setIsLoading(false);
   };
 
+  const latestUserIndex = messages.map((message) => message.role).lastIndexOf("user");
+
   return (
     <section className={`chatbot-panel ${variant}`} aria-label="분석 결과 도우미">
       <div className="chatbot-header">
@@ -99,9 +133,13 @@ function ChatbotPanel({
         )}
       </div>
 
-      <div className="chat-messages" aria-live="polite">
+      <div className="chat-messages" ref={chatMessagesRef} aria-live="polite">
         {messages.map((message, index) => (
-          <div key={message.id || `${message.role}-${index}`} className={`chat-message ${message.role} ${message.isPending ? "is-loading" : ""}`}>
+          <div
+            key={message.id || `${message.role}-${index}`}
+            ref={index === latestUserIndex ? latestUserMessageRef : null}
+            className={`chat-message ${message.role} ${message.isPending ? "is-loading" : ""}`}
+          >
             <p>{formatChatText(message.text)}</p>
           </div>
         ))}
@@ -110,19 +148,25 @@ function ChatbotPanel({
             <p>답변을 정리하는 중입니다...</p>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       <SuggestedQuestionChips questions={suggestedQuestions} onSelect={handleAsk} disabled={isLoading} />
 
       <form className="chat-input-row" onSubmit={handleSubmit}>
-        <input
-          type="text"
+        <textarea
+          ref={inputRef}
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
+          onKeyDown={(event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
           placeholder="궁금한 점을 입력하세요"
           aria-label="챗봇 질문 입력"
           disabled={isLoading}
+          rows={1}
         />
         <button type="submit" disabled={isLoading || !inputValue.trim()}>
           보내기

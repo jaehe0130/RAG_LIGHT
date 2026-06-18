@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 const REPORT_LINKS = [
   {
@@ -28,11 +28,16 @@ const DEFAULT_RECOMMENDED_FORMS = [
 
 function ReportForm({ reportText, result }) {
   const [copyState, setCopyState] = useState("idle");
+  const [editableReportText, setEditableReportText] = useState(reportText || "");
   const recommendedForms = result?.recommended_forms?.length ? result.recommended_forms : DEFAULT_RECOMMENDED_FORMS;
+
+  useEffect(() => {
+    setEditableReportText(reportText || "");
+  }, [reportText]);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(reportText);
+      await navigator.clipboard.writeText(editableReportText);
       setCopyState("copied");
       window.setTimeout(() => setCopyState("idle"), 1800);
     } catch {
@@ -41,7 +46,7 @@ function ReportForm({ reportText, result }) {
   };
 
   const handlePdfDownload = () => {
-    const pdfBlob = createReportPdf(reportText);
+    const pdfBlob = createReportPdf(editableReportText);
     const url = URL.createObjectURL(pdfBlob);
     const link = document.createElement("a");
     link.href = url;
@@ -78,7 +83,16 @@ function ReportForm({ reportText, result }) {
         </div>
       </div>
 
-      <textarea readOnly value={reportText} aria-label="신고서 초안 내용" />
+      <label className="report-editor-label" htmlFor="report-draft-editor">
+        초안 내용을 선택해서 직접 수정할 수 있습니다.
+      </label>
+      <textarea
+        id="report-draft-editor"
+        value={editableReportText}
+        onChange={(event) => setEditableReportText(event.target.value)}
+        aria-label="수정 가능한 신고서 초안 내용"
+        spellCheck="false"
+      />
 
       <div className="button-row">
         <button type="button" onClick={handleCopy}>

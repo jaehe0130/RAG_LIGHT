@@ -51,7 +51,7 @@ function RiskResultCard({ result, onAskQuestion }) {
       </div>
 
       <div className="risk-actions">
-        <button type="button" onClick={() => onAskQuestion("왜 이런 판정인가요?")}>
+        <button type="button" onClick={() => onAskQuestion("판정 이유를 알려줘")}>
           이유 물어보기
         </button>
         <button type="button" className="secondary-action" onClick={() => onAskQuestion("소비자가 할 수 있는 조치는?")}>
