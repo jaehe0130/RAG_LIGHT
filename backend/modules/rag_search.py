@@ -104,16 +104,21 @@ def _call_llm(api_key: str, prompt: str) -> str | None:
         url = "https://api.openai.com/v1/chat/completions"
         model_name = "gpt-4o-mini"
 
-    data = json.dumps({
-        "model": model_name,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.0,
-    }).encode("utf-8")
+    data = json.dumps(
+        {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.0,
+        }
+    ).encode("utf-8")
 
     req = urllib.request.Request(
         url,
         data=data,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
         method="POST",
     )
     try:
@@ -142,7 +147,7 @@ def _summarize_cases(query: str, docs: list[str]) -> list[str]:
         "각 사례의 내용을 빠짐없이 유지하되, 딱딱한 법률 문체를 소비자가 읽기 편한 친근한 말투로만 바꿔주세요.\n"
         "내용 축약이나 생략 없이 말투만 부드럽게 변환해주세요.\n"
         "반드시 아래 JSON 배열 형식으로만 응답하세요 (백틱 없이):\n"
-        "[\"사례1 변환 결과\", \"사례2 변환 결과\", ...]"
+        '["사례1 변환 결과", "사례2 변환 결과", ...]'
     )
 
     print(f"[RAG] 📝 검색된 판례 {len(docs)}건에 대해 LLM 요약 요청 중...")
@@ -162,8 +167,21 @@ def _summarize_cases(query: str, docs: list[str]) -> list[str]:
 
 
 _KEY_SENTENCES_KEYWORDS = [
-    "위약금", "환불", "해지", "청약철회", "손해배상", "면책", "책임", "환급", "취소",
-    "과장", "허위", "보장", "효능", "한정", "선착순",
+    "위약금",
+    "환불",
+    "해지",
+    "청약철회",
+    "손해배상",
+    "면책",
+    "책임",
+    "환급",
+    "취소",
+    "과장",
+    "허위",
+    "보장",
+    "효능",
+    "한정",
+    "선착순",
 ]
 
 
@@ -205,7 +223,9 @@ def _rewrite_query(text: str, max_chars: int = 500) -> str:
     return extract_key_sentences(text)
 
 
-def retrieve_similar_cases(query: str, top_k: int = RERANK_TOP_K, retrieve_k: int = RETRIEVE_K) -> list[str]:
+def retrieve_similar_cases(
+    query: str, top_k: int = RERANK_TOP_K, retrieve_k: int = RETRIEVE_K
+) -> list[str]:
     """공정위 및 소비자원 DB에서 쿼리와 유사한 사례를 검색하고 Reranking하여 반환합니다."""
     if not query.strip():
         print("[RAG] 검색 쿼리가 비어있어 검색을 건너뜁니다.")
@@ -249,7 +269,9 @@ def retrieve_similar_cases(query: str, top_k: int = RERANK_TOP_K, retrieve_k: in
     if _bm25_index is not None and _bm25_docs:
         tokenized_query = _tokenize_kiwi(query)
         scores = _bm25_index.get_scores(tokenized_query)
-        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:retrieve_k]
+        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[
+            :retrieve_k
+        ]
         bm25_docs = [_bm25_docs[i] for i in top_indices if scores[i] > 0]
     print(f"[RAG] ✅ BM25 검색 완료 ({time.time() - t2:.2f}초, {len(bm25_docs)}건)")
 

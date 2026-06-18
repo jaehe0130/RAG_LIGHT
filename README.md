@@ -103,9 +103,11 @@ RAG_light/
   - 원본 JSON 파일(`raw/` 폴더)을 `intfloat/multilingual-e5-large-instruct` 임베딩 모델로 벡터화 후 Qdrant 로컬 DB에 적재
   - `ftc_decisions`(공정위 의결서), `kca_cases`(소비자원 피해구제) 2개 컬렉션 분리 운영
   - UUID5 기반 결정론적 ID로 중복 적재 방지
-* **다중 지식베이스 Dense 검색 + Reranking**:
-  - 두 컬렉션에서 각각 후보 추출 후 `BAAI/bge-reranker-v2-m3` CrossEncoder로 통합 재정렬
-  - LLM Query Rewriting: Gemini API로 OCR 텍스트에서 핵심 법률 쟁점을 압축한 검색 쿼리 생성 (실패 시 키워드 기반 문장 추출 fallback)
+* **하이브리드 검색 (Dense + BM25) + Reranking**:
+  - Dense: 두 컬렉션에서 각각 의미 기반 벡터 검색 수행
+  - BM25: `kiwipiepy` 한국어 형태소 분석 + `rank_bm25`로 키워드 기반 검색 (서버 시작 시 1회 인덱스 구축)
+  - Dense + BM25 결과 합산 후 중복 제거 → `BAAI/bge-reranker-v2-m3` CrossEncoder로 통합 재정렬
+  - LLM Query Rewriting: Gemini API로 OCR 텍스트에서 핵심 법률 쟁점을 500자 이내로 압축한 검색 쿼리 생성 (실패 시 키워드 기반 문장 추출 fallback)
 * **검색 결과 후처리**:
   - `_summarize_cases`: 딱딱한 법률 문체의 검색 결과를 LLM으로 소비자 친화적 말투로 변환하여 프론트엔드에 전달
 
