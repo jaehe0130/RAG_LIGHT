@@ -506,16 +506,24 @@ button:disabled {
 
 .reset-input-action {
   flex: 0 0 auto;
-  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-height: 36px;
+  border-radius: 999px;
   border: 1px solid var(--color-line);
-  padding: 0 0.7rem;
+  padding: 0;
   color: #526174;
   background: #ffffff;
-  font-weight: 800;
+  font-size: 1.08rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .reset-input-action:hover:not(:disabled) {
   background: #eef3f8;
+  transform: rotate(-12deg);
 }
 
 .drop-zone {
@@ -940,9 +948,23 @@ button:disabled {
   border-radius: 8px;
   padding: 14px;
   color: #213041;
-  background: #f8fbfe;
+  background: #ffffff;
   font: inherit;
   line-height: 1.6;
+}
+
+.report-panel textarea:focus {
+  border-color: #8bb7dd;
+  box-shadow: 0 0 0 3px rgba(139, 183, 221, 0.22);
+  outline: none;
+}
+
+.report-editor-label {
+  display: block;
+  margin: 0 0 8px;
+  color: #5f7083;
+  font-size: 0.86rem;
+  font-weight: 800;
 }
 
 .report-panel {
@@ -1576,7 +1598,7 @@ button:disabled {
 
 .chip-button {
   border-radius: 999px;
-  font-size: 0.84rem;
+  font-size: 0.95rem;
   min-height: 46px;
   min-width: 0;
   padding: 8px 10px;
@@ -1589,15 +1611,31 @@ button:disabled {
 .chat-input-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 8px;
 }
 
-.chat-input-row input {
+.chat-input-row textarea {
   min-height: 44px;
+  max-height: 68px;
   width: 100%;
   border: 1px solid #cbd7e3;
-  border-radius: 6px;
-  padding: 0 12px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  line-height: 1.45;
+  resize: none;
+  overflow-y: auto;
+}
+
+.chat-input-row textarea:focus {
+  border-color: #8bb7dd;
+  box-shadow: 0 0 0 3px rgba(139, 183, 221, 0.22);
+  outline: none;
+}
+
+.chat-input-row textarea::placeholder {
+  color: #8b98a8;
 }
 
 .chat-fab,
@@ -1786,7 +1824,7 @@ button:disabled {
   }
 
   .reset-input-action {
-    width: max-content;
+    width: 36px;
   }
 
   .landing-actions > *,

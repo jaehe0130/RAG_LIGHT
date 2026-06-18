@@ -45,8 +45,6 @@ function UploadPanel({ selectedFile, textInput, isAnalyzing, errorMessage, onFil
     onResetAll();
   };
 
-  const hasInput = Boolean(selectedFile || textInput.trim());
-
   return (
     <section className="upload-panel" aria-label="문서 업로드">
       <div className="section-heading upload-heading">
@@ -54,11 +52,9 @@ function UploadPanel({ selectedFile, textInput, isAnalyzing, errorMessage, onFil
           <h2>분석할 문서를 올려주세요</h2>
           <p>파일을 업로드하거나 약관, 계약서, 광고 문구를 직접 입력할 수 있습니다.</p>
         </div>
-        {hasInput && (
-          <button type="button" className="reset-input-action" onClick={handleResetAll} disabled={isAnalyzing}>
-            전체 초기화
-          </button>
-        )}
+        <button type="button" className="reset-input-action" onClick={handleResetAll} disabled={isAnalyzing} aria-label="입력 내용 새로고침">
+          ↻
+        </button>
       </div>
 
       <div

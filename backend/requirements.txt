@@ -17,6 +17,10 @@ qdrant-client==1.18.0
 sentence-transformers==5.5.1
 python-dotenv==1.2.2
 
+# -- BM25 Hybrid Search ------------------------------------------
+rank-bm25
+kiwipiepy
+
 
 
 

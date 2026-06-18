@@ -97,8 +97,17 @@ function App() {
   };
 
   const askChatbot = (question) => {
+    const currentScrollX = window.scrollX;
+    const currentScrollY = window.scrollY;
     setChatQuestion({ id: Date.now(), text: question });
-    setIsChatOpen(true);
+
+    if (window.matchMedia("(max-width: 1120px)").matches) {
+      setIsChatOpen(true);
+    }
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo(currentScrollX, currentScrollY);
+    });
   };
 
   const isInitialChatState = (messages) =>

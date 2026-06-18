@@ -67,29 +67,49 @@ RAG_light/
 
 ---
 
-### 🎨 팀원 B (김휘주) : 프론트엔드 UI 및 파이썬 OCR 모듈
-> **주 사용 언어**: `JS/TS` (React), `Python`  
-> **전담 작업 공간**: `frontend/src/` (미리 생성된 `App.js` 및 `components/*` 뼈대 파일 활용), `backend/modules/ocr.py`, `backend/requirements.txt`
-* **React 프론트엔드 UI/UX 가이드 (핵심 서비스 연계)**: 
-  - **초기 컴포넌트 활용**: `frontend/src/components/` 하위에 미리 생성된 `UploadSection.js`, `TrafficLight.js`, `ReportForm.js` 파일의 주석(TODO)을 참고하여 살을 붙이는 방식으로 개발을 시작하세요.
-  - **직관적 업로드**: 약관이나 광고 캡처본 업로드를 위한 드래그 앤 드롭 UI 구현
-  - **결과 시각화 (공정 신호등)**: 백엔드 API에서 전달된 3색 신호등을 명확히 표출하고, `toxic_clauses`(독소 조항) 텍스트에 하이라이팅(형광펜) 효과 적용
-  - **📊 맞춤형 피해 사례 트렌드 시각화**: 백엔드가 전달하는 `statistics` JSON 데이터(유사 사례 건수, 분쟁 비율)를 바탕으로, 차트 라이브러리(Recharts 등)를 활용해 "최근 회원님과 유사한 피해 접수 00건" 등의 트렌드 위젯/그래프 렌더링
-  - **🚨 원클릭 피해 구제 연계 (신고서)**: 판정 결과가 **RED(위험)**일 때만 활성화되는 기능. 백엔드가 내려주는 `report_form`(소비자원 신청서 또는 공정위 신고서 초안) 텍스트를 화면에 띄우고 **[문서 복사하기]** 또는 **[PDF 다운로드]** 버튼을 만들어 원스톱 신고 로직 구현
-* **파이썬 OCR 파이프라인 개발 가이드**:
-  - 최적의 OCR 엔진 연동 및 OpenCV를 활용한 해상도 향상/이진화 전처리 로직 구현
-  - RAG와 LLM이 이해하기 쉽도록 텍스트 덩어리를 정제하여 반환
+### 🎨 팀원 B (김휘주) : 프론트엔드 UI/UX 및 OCR 입력 흐름
+> **주 사용 언어**: `JavaScript` (React/Vite), `Python`  
+> **전담 작업 공간**: `frontend/src/App.jsx`, `frontend/src/components/*.jsx`, `frontend/src/styles.css`, `frontend/src/api/*`, `backend/modules/ocr.py`, `backend/requirements.txt`
+* **React 프론트엔드 UI/UX 구현**:
+  - **파일 업로드 + 직접 텍스트 입력 지원**: 기존 PDF/JPG/PNG 업로드 기능을 유지하면서, 파일 없이 약관·계약서·광고 문구를 textarea에 직접 입력해도 분석할 수 있도록 UI와 `FormData` 전송 흐름을 구현했습니다.
+  - **입력 초기화 및 재분석 UX**: 파일 지우기와 상단 새로고침 아이콘 초기화 버튼을 제공하고, 새 파일/텍스트 입력 시 이전 분석 결과와 챗봇 대화가 섞이지 않도록 세션 상태 초기화 로직을 정리했습니다.
+  - **3색 신호등 결과 화면 개선**: `GREEN/YELLOW/RED` 판정별로 다른 사용자 흐름을 설계했습니다. 초록은 안심 안내, 노랑은 검토 메모 중심, 빨강은 신고 준비 흐름으로 구분했습니다.
+  - **신고서 초안 및 추천 신고 양식 UX**: 백엔드의 `recommended_forms` 응답을 카드 형태로 표시하고, 미리보기/다운로드 버튼, 신고 준비 체크, 직접 수정 가능한 신고서 초안 편집 영역, 수정본 기준 문서 복사/PDF 다운로드 기능을 구성했습니다.
+  - **챗봇 도우미 개선**: 분석 결과 기반 질문 버튼, 답변 중 표시, 중복 질문 방지, 대화 세션 유지, 긴 답변 줄바꿈 및 말풍선 가독성 개선을 적용했습니다. 긴 질문 입력 시 입력칸이 최대 2줄까지 자동 확장되고 이후 내부 스크롤로 처리되며, 버튼 질문을 눌러도 메인 화면 스크롤이 흔들리지 않도록 보정했습니다.
+  - **서비스 소개 페이지 스타일링**: 공공 서비스 느낌의 밝은 하늘색·민트·화이트 계열 배경과 카드 톤으로 랜딩 페이지 색감을 정리했습니다.
+  - **프론트 정리 작업**: 중복 `.js` re-export 컴포넌트를 삭제하고 실제 사용 컴포넌트를 `.jsx` 기준으로 정리했습니다.
+* **OCR 입력 파이프라인 연계**:
+  - PDF/JPG/PNG 파일 업로드 시 백엔드 OCR 결과를 분석 흐름으로 전달하고, 텍스트만 입력한 경우에는 OCR 없이 입력 텍스트를 바로 RAG/LangGraph 분석으로 넘기는 흐름을 반영했습니다.
+  - PDF는 PyMuPDF 내장 텍스트 추출을 우선 사용하고, 스캔 PDF/이미지는 Google Document AI 및 PaddleOCR fallback 흐름을 사용할 수 있도록 OCR 모듈 구조를 정리했습니다.
+  - **OCR 처리 흐름**:
+    ```text
+    PDF/JPG/PNG 업로드
+    → 파일 확장자 확인
+    → 텍스트 PDF면 PyMuPDF로 내장 텍스트 추출
+    → 스캔 PDF/JPG/PNG면 Google Document AI OCR
+    → 실패 시 fallback 처리
+      - 이미지(JPG/PNG): OpenCV 전처리 후 PaddleOCR 실행
+      - PDF: PDF 페이지를 이미지로 렌더링한 뒤 PaddleOCR 실행
+    → 텍스트 정제
+    → RAG / LangGraph 위험 판정 API로 전달
+    ```
 
 ---
 
 ### 🔍 팀원 C (이예경) : 데이터베이스 검색(RAG) 엔진 구현
 > **주 사용 언어**: `Python`  
 > **전담 작업 공간**: `backend/modules/rag_search.py` (검색용), `backend/data/ingest_qdrant.py` (데이터 적재용)
-* **Qdrant 초기 데이터 적재 (Ingestion)**: 
-  - 원본 JSON 파일을 임베딩(Embedding) 처리 후 Qdrant DB에 초기 적재하는 파이프라인 코드 작성
-  - 의미 기반 청킹(Semantic Chunking) 및 메타데이터(사건번호 등) 분리 적재 필수
-* **다중 지식베이스 연동**: 공정위 의결서 DB 및 소비자원 상담 DB 등 Qdrant 연동 
-* **하이브리드 검색**: 문서별 BM25(키워드 기반) + Dense(의미 기반) 병렬 검색으로 가장 유사한 판례 추출 기능 구현
+* **Qdrant 초기 데이터 적재 (Ingestion)**:
+  - 원본 JSON 파일(`raw/` 폴더)을 `intfloat/multilingual-e5-large-instruct` 임베딩 모델로 벡터화 후 Qdrant 로컬 DB에 적재
+  - `ftc_decisions`(공정위 의결서), `kca_cases`(소비자원 피해구제) 2개 컬렉션 분리 운영
+  - UUID5 기반 결정론적 ID로 중복 적재 방지
+* **하이브리드 검색 (Dense + BM25) + Reranking**:
+  - Dense: 두 컬렉션에서 각각 의미 기반 벡터 검색 수행
+  - BM25: `kiwipiepy` 한국어 형태소 분석 + `rank_bm25`로 키워드 기반 검색 (서버 시작 시 1회 인덱스 구축)
+  - Dense + BM25 결과 합산 후 중복 제거 → `BAAI/bge-reranker-v2-m3` CrossEncoder로 통합 재정렬
+  - LLM Query Rewriting: Gemini API로 OCR 텍스트에서 핵심 법률 쟁점을 500자 이내로 압축한 검색 쿼리 생성 (실패 시 키워드 기반 문장 추출 fallback)
+* **검색 결과 후처리**:
+  - `_summarize_cases`: 딱딱한 법률 문체의 검색 결과를 LLM으로 소비자 친화적 말투로 변환하여 프론트엔드에 전달
 
 ---
 
@@ -136,6 +156,5 @@ uvicorn main:app --reload
 ### 프론트엔드 (Frontend)
 ```bash
 cd frontend
-npm install
-npm start
+npm run dev
 ```
