@@ -5,6 +5,8 @@ import urllib.request
 import urllib.error
 import re
 import sys
+import shutil
+import copy
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
@@ -32,18 +34,18 @@ def call_gemini_api(prompt: str) -> list:
         "Authorization": f"Bearer {GEMINI_API_KEY}"
     }
     
-    data = {
+    data = json.dumps({
         "model": MODEL_NAME,
         "messages": [
             {"role": "system", "content": "당신은 한국 공정거래법 및 학습데이터 품질 관리에 정통한 AI 검수관입니다. 주어진 QA 레코드를 면밀히 감사하여 형식이나 내용상 위배 사항을 찾아내어 JSON 배열로 보고해야 합니다."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.2
-    }
+    }).encode("utf-8")
     
     req = urllib.request.Request(
         url,
-        data=json.dumps(data).encode("utf-8"),
+        data=data,
         headers=headers,
         method="POST"
     )
@@ -64,7 +66,7 @@ def call_gemini_api(prompt: str) -> list:
         return []
 
 def main():
-    print("🚀 [AI Auditor] Loading raw 1,000 cases...")
+    print("🚀 [Dual-Validation Pipeline] Loading raw 1,000 cases...")
     
     if not os.path.exists(RAW_CACHE_FILE):
         print(f"❌ Error: {RAW_CACHE_FILE} does not exist. Please run generate_1000_qa.py first.")
@@ -75,106 +77,153 @@ def main():
         
     print(f"📊 Loaded {len(raw_data)} cases from raw cache.")
     
-    # Load audited cache if exists
+    # Load audited cache if exists to prevent duplicate API audits
     audited_issues = {}
     if os.path.exists(VERIFIED_CACHE_FILE):
         try:
             with open(VERIFIED_CACHE_FILE, "r", encoding="utf-8") as f:
                 audited_issues = json.load(f)
-            print(f"🔄 Loaded {len(audited_issues)} cached audit results from {VERIFIED_CACHE_FILE}.")
+            print(f"🔄 Loaded {len(audited_issues)} cached audit results.")
         except Exception:
             audited_issues = {}
             
-    # Audit cases in batches of 40 to prevent rate limits
-    batch_size = 40
     raw_keys = list(raw_data.keys())
     
-    for start_idx in range(0, 1000, batch_size):
+    # Batch size of 20 for high precision AI review
+    batch_size = 20
+    
+    for start_idx in range(0, len(raw_data), batch_size):
         batch_keys = raw_keys[start_idx : start_idx + batch_size]
         need_audit = [k for k in batch_keys if k not in audited_issues]
         
         if not need_audit:
             continue
             
-        print(f"📈 [Auditing] Auditing batch {start_idx // batch_size + 1}/25 (Index {start_idx} to {min(1000, start_idx + batch_size)})...")
+        print(f"📈 [Auditing] Dual-Validation Batch {start_idx // batch_size + 1}/{len(raw_data) // batch_size + 1} (Index {start_idx} to {min(len(raw_data), start_idx + batch_size)})...")
         
-        req_str = ""
+        # 1. Step 1: Local rule validation for immediate formats
+        local_issues = {}
+        ai_target_keys = []
+        
         for k in need_audit:
             item = raw_data[k]
-            req_str += (
-                f"- Index: {item['idx']}\n"
-                f"  페르소나: {item['persona']}\n"
-                f"  질문: {item['question']}\n"
-                f"  답변: {item['answer']}\n"
-                f"  사실관계: {item['facts']}\n"
-                f"  법리해석: {item['legal_reasoning']}\n"
-                f"  적용법률: {item['applicable_law']}\n"
-                f"  참조문서: {item['ref_doc']}\n\n"
+            has_local_err = False
+            prob = ""
+            sol = ""
+            
+            # Facts format check
+            facts = item.get("facts", "")
+            required_facts = ["주체:", "상대방:", "시장:", "핵심행위:", "결과:"]
+            if not all(rf in facts for rf in required_facts):
+                has_local_err = True
+                prob = "사실관계(facts) 형식 미준수 (주체/상대방/시장/핵심행위/결과 필수 키 누락)"
+                sol = "사실관계 필드를 '주체: ... / 상대방: ... / 시장: ... / 핵심행위: ... / 결과: ...' 형식에 맞게 보완하십시오."
+            elif "/" not in facts:
+                has_local_err = True
+                prob = "사실관계(facts) 형식 미준수 (구분자 '/' 누락)"
+                sol = "사실관계의 각 필드를 '/' 기호로 명확히 구분하십시오."
+                
+            # Legal reasoning format check
+            lr = item.get("legal_reasoning", "")
+            if not lr.startswith("법리 해석:"):
+                has_local_err = True
+                prob = "법리 해석 접두어 '법리 해석:' 누락"
+                sol = "법리 해석 텍스트 시작 부분에 '법리 해석:' 접두어를 삽입하십시오."
+                
+            if has_local_err:
+                local_issues[k] = {
+                    "idx": int(k),
+                    "has_issue": True,
+                    "problem": prob,
+                    "solution": sol
+                }
+            else:
+                ai_target_keys.append(k)
+                
+        # 2. Step 2: AI auditor check for logical and stylistic integrity
+        if ai_target_keys:
+            req_str = ""
+            for k in ai_target_keys:
+                item = raw_data[k]
+                req_str += (
+                    f"- Index: {item['idx']}\n"
+                    f"  페르소나: {item['persona']}\n"
+                    f"  질문: {item['question']}\n"
+                    f"  답변: {item['answer']}\n"
+                    f"  적용법률: {item['applicable_law']}\n"
+                    f"  참조문서: {item['ref_doc']}\n\n"
+                )
+                
+            prompt = (
+                f"당신은 대한민국 공정거래법 및 소비자법 학습데이터 품질 관리에 정통한 전문 AI 법률 감사관입니다.\n"
+                f"제시된 {len(ai_target_keys)}개 데이터셋의 질문과 답변, 적용 법률의 정합성을 아래의 엄격한 Rule-book에 따라 검수하십시오.\n\n"
+                f"[★AI 검수관 Rule-book 평가 기준]\n"
+                f"1. 페르소나별 톤앤매너 불일치 오류:\n"
+                f"   - '일반국민': 대중이 겪을 법한 일상의 피해에 관한 친근한 질문이어야 하며 답변도 이해하기 쉬워야 합니다.\n"
+                f"   - '기업 컴플라이언스 담당자': 기업 내부 실무자 관점의 비즈니스 소송 및 위반 리스크 통제 관련 질문과 리스크 완화 관점의 답변이어야 합니다.\n"
+                f"   - '논문 준비 학생': 학술 연구용, 소비자 후생, 쟁점 분석 등 학술적 질문과 판례 중심의 답변이어야 합니다.\n"
+                f"2. 적용법률 오매칭 오류:\n"
+                f"   - 질문/답변에 언급된 위반 행위(예: 환불 거부)와 매칭된 'applicable_law'의 실제 법령/조항(예: 표시광고법 등 엉뚱한 법 적용)이 법리적으로 심각하게 맞지 않는 경우.\n"
+                f"3. 기계적 템플릿 중복 오류:\n"
+                f"   - 답변 도입부가 항상 동일한 어구(예: '~는 다음과 같습니다', '~검토한 결과는 다음과 같습니다')로 일률적으로 끝나거나, 모든 레코드의 마지막에 '구체적인 사안에 대해 더 자세한 검토가 필요하다면...' 식의 획일적인 꼬리표가 반복되는 등 AI 생성 특유의 기계적 반복 패턴이 나타나는 경우.\n\n"
+                f"[★중요 - 중대한 결함만 보고 및 허위 경보 금지]\n"
+                f"- 위의 3대 규칙에 위배되는 **중대한 결함이나 모순이 발견된 아이템에 대해서만** 'problem'과 'solution'을 JSON 배열에 담아 기재하십시오.\n"
+                f"- 단순한 어조 차이나 허용 가능한 유연한 답변 구조를 지닌 **정상적이고 자연스러운 데이터는 절대로 억지로 문제를 제기하지 말고 무조건 통과(JSON 배열에 미기재)** 시키십시오.\n"
+                f"- 마크다운 기호 없이 순수한 JSON 배열 포맷으로만 응답해야 합니다.\n\n"
+                f"[검수 대상 목록]\n{req_str}\n"
+                f"[지침]\n"
+                f"- 문제 발견 시 JSON 배열 규격 예시:\n"
+                f"  [\n"
+                f"    {{\n"
+                f"      \"idx\": 0,\n"
+                f"      \"problem\": \"[문제점] 구체적인 룰 위배 원인을 서술\",\n"
+                f"      \"solution\": \"[해결방안] 프롬프트나 데이터를 어떻게 교정해야 하는지 서술\"\n"
+                f"    }}\n"
+                f"  ]\n"
             )
             
-        prompt = (
-            f"다음 {len(need_audit)}개 학습데이터의 질문, 답변, 적용법률, 사실관계 형식을 AI의 관점에서 검수해주십시오.\n\n"
-            f"[요구사항 및 평가 기준]\n"
-            f"1. 톤앤매너: 일반국민은 구어체 및 해결방안 위주여야 하며, 기업담당자는 컴플라이언스 리스크 중심, 학생은 학술적 용어 및 대법원 판례 중심이어야 합니다.\n"
-            f"2. 사실관계(facts) 형식: '주체: ... / 상대방: ... / 시장: ... / 핵심행위: ... / 결과: ...' 형식을 완벽히 만족해야 합니다. 만족하지 않으면 오류로 판정하십시오.\n"
-            f"3. 법리해석 형식: '법리 해석: '[세부위반유형]'은(는) 상대방에게 불이익을 주거나 소비자를 오인하게 할 수 있어 '[적용법률]' 위반으로 볼 수 있다.' 형식을 만족해야 합니다. 만족하지 않으면 오류로 판정하십시오.\n"
-            f"4. 법률 오매칭: 해당 사건의 위반 내용과 적용법률이 맞지 않거나 엉뚱한 법률이 적혀 있으면 오류로 판정하십시오.\n\n"
-            f"[검수 대상 목록]\n{req_str}\n"
-            f"[지침]\n"
-            f"- 문제가 발견된 케이스에 대해 JSON 객체 배열로 반환하십시오. 예시:\n"
-            f"  [\n"
-            f"    {{\n"
-            f"      \"idx\": 0,\n"
-            f"      \"problem\": \"[문제점] 구체적인 톤 또는 형식 오류에 대한 설명\",\n"
-            f"      \"solution\": \"[해결방안] Rule Validator 혹은 프롬프트 조정을 통해 교정할 방안 설명\"\n"
-            f"    }}\n"
-            f"  ]\n"
-            f"- 완벽하게 정상인 케이스에 대해서는 보고하지 마십시오. 즉, 문제가 있는 케이스만 JSON 배열에 담아주십시오.\n"
-            f"- 마크다운 백틱 없이 순수한 JSON 배열 포맷으로만 응답해주십시오.\n"
-        )
-        
-        success = False
-        for attempt in range(3):
-            batch_res = call_gemini_api(prompt)
-            if isinstance(batch_res, list):
-                # Save results (for normal cases, we store empty dict indicating checked but normal)
-                # First mark all in this batch as checked and normal
-                for k in need_audit:
-                    audited_issues[k] = {"idx": int(k), "has_issue": False}
-                    
-                # Overlay issues found
-                for issue in batch_res:
-                    idx_str = str(issue.get("idx"))
-                    if idx_str in audited_issues:
-                        audited_issues[idx_str] = {
-                            "idx": int(idx_str),
-                            "has_issue": True,
-                            "problem": issue.get("problem"),
-                            "solution": issue.get("solution")
-                        }
+            ai_success = False
+            for attempt in range(3):
+                batch_res = call_gemini_api(prompt)
+                if isinstance(batch_res, list):
+                    # Default all to normal
+                    for k in ai_target_keys:
+                        audited_issues[k] = {"idx": int(k), "has_issue": False}
                         
-                with open(VERIFIED_CACHE_FILE, "w", encoding="utf-8") as f:
-                    json.dump(audited_issues, f, ensure_ascii=False, indent=2)
+                    # Overlay detected issues
+                    for issue in batch_res:
+                        idx_str = str(issue.get("idx"))
+                        if idx_str in audited_issues:
+                            audited_issues[idx_str] = {
+                                "idx": int(idx_str),
+                                "has_issue": True,
+                                "problem": issue.get("problem"),
+                                "solution": issue.get("solution")
+                            }
+                    ai_success = True
+                    break
+                else:
+                    print(f"⚠️ Batch AI audit failed, retrying in 5s... (Attempt {attempt+1}/3)")
+                    time.sleep(5)
                     
-                print(f"✅ Batch audited. (Checked: {len(audited_issues)}/1000)")
-                success = True
-                break
-            else:
-                print(f"⚠️ Batch audit failed, retrying in 5 seconds... (Attempt {attempt+1}/3)")
-                time.sleep(5)
+            if not ai_success:
+                print("❌ Critical Error: AI API Audit failed permanently. Terminating...")
+                return
                 
-        if not success:
-            print("❌ Critical: Failed to audit batch. Terminating execution.")
-            return
+        # 3. Merge local issues into audited_issues
+        for k, l_issue in local_issues.items():
+            audited_issues[k] = l_issue
             
+        # Write back cache at each batch
+        with open(VERIFIED_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(audited_issues, f, ensure_ascii=False, indent=2)
+            
+        print(f"✅ Batch validated & merged. (Total audited: {len(audited_issues)}/1000)")
         time.sleep(4)
         
-    print("🎉 All 1,000 cases audited successfully! Preparing Excel writing...")
+    print("🎉 All 1,000 cases validated successfully via dual-validation pipeline! Preparing Excel writing...")
     
     # 7. Copy template and load Excel workbook
-    import shutil
-    import copy
-    import time
     print("📋 Copying template file to destination...")
     copied = False
     for attempt in range(12):
@@ -233,7 +282,7 @@ def main():
         item = raw_data[str(idx)]
         row_id = f"QA-{idx + 1:04d}"
         
-        no_str = item["의결서관리번호"]
+        no_str = item.get("의결서관리번호") or ""
         if no_str and len(no_str) >= 4:
             ref_val = f"의결서{no_str[:2]}-{no_str[2:4]}  1줄-{no_str}줄"
         else:
@@ -273,12 +322,13 @@ def main():
             "추가 시나리오": add_sc,
             "응답 설계 포인트": point_desc,
             "의도된 설명 스타일": style_desc,
-            "주의사항_비고": ref_val,
+            "주의사항": item.get("주의사항") or ref_val,
+            "비고": item.get("비고") or ref_val,
             "문제점_및_해결방안": col_17_val
         }
         all_rows.append(row_data)
         
-    # Write to 전체_QA
+    # Write to 전체_QA (16번째 열 헤더: '근거' -> 근거 기재)
     sh_total = wb["전체_QA"]
     styles_total = sheet_styles["전체_QA"]
     for idx, rdata in enumerate(all_rows):
@@ -299,11 +349,11 @@ def main():
         sh_total.cell(row=r, column=13).value = rdata["추가 시나리오"]
         sh_total.cell(row=r, column=14).value = rdata["응답 설계 포인트"]
         sh_total.cell(row=r, column=15).value = rdata["의도된 설명 스타일"]
-        sh_total.cell(row=r, column=16).value = rdata["주의사항_비고"]
+        sh_total.cell(row=r, column=16).value = rdata["근거"]
         sh_total.cell(row=r, column=17).value = rdata["문제점_및_해결방안"]
     print("✍️ Wrote '전체_QA' sheet (1000 rows).")
 
-    # Filter and write to General Public
+    # Filter and write to General Public (16번째 열 헤더: '주의사항' -> 주의사항 기재)
     general_rows = [row for row in all_rows if row["페르소나"] == "일반국민"]
     sh_gen = wb["일반국민"]
     styles_gen = sheet_styles["일반국민"]
@@ -325,37 +375,37 @@ def main():
         sh_gen.cell(row=r, column=13).value = rdata["추가 시나리오"]
         sh_gen.cell(row=r, column=14).value = rdata["응답 설계 포인트"]
         sh_gen.cell(row=r, column=15).value = rdata["의도된 설명 스타일"]
-        sh_gen.cell(row=r, column=16).value = rdata["주의사항_비고"]
+        sh_gen.cell(row=r, column=16).value = rdata["주의사항"]
         sh_gen.cell(row=r, column=17).value = rdata["문제점_및_해결방안"]
     print(f"✍️ Wrote '일반국민' sheet ({len(general_rows)} rows).")
 
-    # Write to Compliance
+    # Write to Compliance (16번째 열 헤더: '주의사항' -> 주의사항 기재)
     comp_rows = [row for row in all_rows if row["페르소나"] == "기업 컴플라이언스 담당자"]
     sh_comp = wb["기업 컴플라이언스 담당자"]
-    styles_comp = sheet_styles["기업 컴플라이언스 담당자"]
+    styles_comp = sheet_styles["기업 컴fl라이언스 담당자"] if "기업 컴fl라이언스 담당자" in wb.sheetnames else sheet_styles["기업 컴플라이언스 담당자"]
     for idx, rdata in enumerate(comp_rows):
         r = idx + 3
-        apply_row_styles(sh_comp, r, styles_comp)
-        sh_comp.cell(row=r, column=1).value = rdata["ID"]
-        sh_comp.cell(row=r, column=2).value = rdata["페르소나"]
-        sh_comp.cell(row=r, column=3).value = rdata["질문유형"]
-        sh_comp.cell(row=r, column=4).value = rdata["난이도"]
-        sh_comp.cell(row=r, column=5).value = rdata["주제"]
-        sh_comp.cell(row=r, column=6).value = rdata["질문"]
-        sh_comp.cell(row=r, column=7).value = rdata["답변"]
-        sh_comp.cell(row=r, column=8).value = rdata["근거"]
-        sh_comp.cell(row=r, column=9).value = rdata["주제별·수준별 의결서 요약"]
-        sh_comp.cell(row=r, column=10).value = rdata["facts"] if "facts" in rdata else rdata.get("사실(Facts)")
-        sh_comp.cell(row=r, column=11).value = rdata["법리 해석"]
-        sh_comp.cell(row=r, column=12).value = rdata["기본 시나리오"]
-        sh_comp.cell(row=r, column=13).value = rdata["추가 시나리오"]
-        sh_comp.cell(row=r, column=14).value = rdata["응답 설계 포인트"]
-        sh_comp.cell(row=r, column=15).value = rdata["의도된 설명 스타일"]
-        sh_comp.cell(row=r, column=16).value = rdata["주의사항_비고"]
-        sh_comp.cell(row=r, column=17).value = rdata["문제점_및_해결방안"]
+        apply_row_styles(wb["기업 컴플라이언스 담당자"], r, styles_comp)
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=1).value = rdata["ID"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=2).value = rdata["페르소나"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=3).value = rdata["질문유형"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=4).value = rdata["난이도"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=5).value = rdata["주제"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=6).value = rdata["질문"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=7).value = rdata["답변"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=8).value = rdata["근거"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=9).value = rdata["주제별·수준별 의결서 요약"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=10).value = rdata["facts"] if "facts" in rdata else rdata.get("사실(Facts)")
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=11).value = rdata["법리 해석"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=12).value = rdata["기본 시나리오"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=13).value = rdata["추가 시나리오"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=14).value = rdata["응답 설계 포인트"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=15).value = rdata["의도된 설명 스타일"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=16).value = rdata["주의사항"]
+        wb["기업 컴플라이언스 담당자"].cell(row=r, column=17).value = rdata["문제점_및_해결방안"]
     print(f"✍️ Wrote '기업 컴플라이언스 담당자' sheet ({len(comp_rows)} rows).")
 
-    # Write to Student
+    # Write to Student (16번째 열 헤더: '비고' -> 비고 기재)
     student_rows = [row for row in all_rows if row["페르소나"] == "논문 준비 학생"]
     sh_stud = wb["논문 준비 학생"]
     styles_stud = sheet_styles["논문 준비 학생"]
@@ -377,7 +427,7 @@ def main():
         sh_stud.cell(row=r, column=13).value = rdata["추가 시나리오"]
         sh_stud.cell(row=r, column=14).value = rdata["응답 설계 포인트"]
         sh_stud.cell(row=r, column=15).value = rdata["의도된 설명 스타일"]
-        sh_stud.cell(row=r, column=16).value = rdata["주의사항_비고"]
+        sh_stud.cell(row=r, column=16).value = rdata["비고"]
         sh_stud.cell(row=r, column=17).value = rdata["문제점_및_해결방안"]
     print(f"✍️ Wrote '논문 준비 학생' sheet ({len(student_rows)} rows).")
 
