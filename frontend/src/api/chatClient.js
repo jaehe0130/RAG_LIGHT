@@ -1,4 +1,4 @@
-const CHAT_API_URL = "http://127.0.0.1:8000/api/chat";
+const CHAT_API_URL = "/api/chat";
 
 export async function sendChatMessage(question, history, analysisResult) {
   const payload = buildChatPayload(question, history, analysisResult);

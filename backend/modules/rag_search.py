@@ -51,6 +51,23 @@ def _build_bm25_index() -> None:
         print(f"[BM25] 패키지 없음, BM25 비활성화: {e}")
         return
 
+    import pickle
+    cache_path = _DATA_DIR / "bm25_cache.pkl"
+
+    if cache_path.exists():
+        print("[BM25] 캐시된 인덱스 로드 중...")
+        t0 = time.time()
+        try:
+            with open(cache_path, "rb") as f:
+                cache_data = pickle.load(f)
+            _bm25_docs = cache_data["docs"]
+            _bm25_index = cache_data["index"]
+            _kiwi = Kiwi()
+            print(f"[BM25] 캐시 로드 완료: {len(_bm25_docs)}개 문서 ({time.time() - t0:.2f}초)")
+            return
+        except Exception as e:
+            print(f"[BM25] 캐시 로드 실패, 새로 구축합니다. 에러: {e}")
+
     print("[BM25] 인덱스 구축 중...")
     t0 = time.time()
     _kiwi = Kiwi()
@@ -90,6 +107,13 @@ def _build_bm25_index() -> None:
     _bm25_index = BM25Okapi(tokenized)
     _bm25_docs = docs
     print(f"[BM25] 인덱스 구축 완료: {len(docs)}개 문서 ({time.time() - t0:.1f}초)")
+
+    try:
+        with open(cache_path, "wb") as f:
+            pickle.dump({"docs": _bm25_docs, "index": _bm25_index}, f)
+        print(f"[BM25] 인덱스 캐시 저장 완료: {cache_path}")
+    except Exception as e:
+        print(f"[BM25] 인덱스 캐시 저장 실패: {e}")
 
 
 _build_bm25_index()

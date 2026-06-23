@@ -15,6 +15,9 @@ SUPPORTED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 SUPPORTED_MIME_TYPES = {"application/pdf", "image/jpeg", "image/png"}
 
 _paddle_ocr = None
+_google_client = None
+_google_processor_name = None
+_documentai = None
 
 
 def extract_text(file_path: str) -> Dict[str, Any]:
@@ -200,6 +203,39 @@ def _extract_image(path: Path, mime_type: str, warnings: List[str]) -> Dict[str,
         _remove_temp_file(preprocessed_path)
 
 
+def _get_google_client_and_processor():
+    global _google_client, _google_processor_name, _documentai
+    if _google_client is None:
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT_ID")
+        location = os.getenv("DOCUMENT_AI_LOCATION")
+        processor_id = os.getenv("DOCUMENT_AI_PROCESSOR_ID")
+
+        missing = [
+            name
+            for name, value in {
+                "GOOGLE_CLOUD_PROJECT_ID": project_id,
+                "DOCUMENT_AI_LOCATION": location,
+                "DOCUMENT_AI_PROCESSOR_ID": processor_id,
+            }.items()
+            if not value
+        ]
+        if missing:
+            raise ValueError(f"Missing Document AI env vars: {', '.join(missing)}")
+
+        try:
+            from google.api_core.client_options import ClientOptions
+            from google.cloud import documentai
+            _documentai = documentai
+        except ImportError as exc:
+            raise ImportError("Install google-cloud-documentai to use Google Document AI.") from exc
+
+        client_options = ClientOptions(api_endpoint=f"{location}-documentai.googleapis.com")
+        _google_client = documentai.DocumentProcessorServiceClient(client_options=client_options)
+        _google_processor_name = _google_client.processor_path(project_id, location, processor_id)
+        
+    return _google_client, _google_processor_name, _documentai
+
+
 def google_document_ai_ocr(file_path: str, mime_type: str) -> str:
     """Run Google Document AI using Application Default Credentials.
 
@@ -208,31 +244,7 @@ def google_document_ai_ocr(file_path: str, mime_type: str) -> str:
         DOCUMENT_AI_LOCATION
         DOCUMENT_AI_PROCESSOR_ID
     """
-    project_id = os.getenv("GOOGLE_CLOUD_PROJECT_ID")
-    location = os.getenv("DOCUMENT_AI_LOCATION")
-    processor_id = os.getenv("DOCUMENT_AI_PROCESSOR_ID")
-
-    missing = [
-        name
-        for name, value in {
-            "GOOGLE_CLOUD_PROJECT_ID": project_id,
-            "DOCUMENT_AI_LOCATION": location,
-            "DOCUMENT_AI_PROCESSOR_ID": processor_id,
-        }.items()
-        if not value
-    ]
-    if missing:
-        raise ValueError(f"Missing Document AI env vars: {', '.join(missing)}")
-
-    try:
-        from google.api_core.client_options import ClientOptions
-        from google.cloud import documentai
-    except ImportError as exc:
-        raise ImportError("Install google-cloud-documentai to use Google Document AI.") from exc
-
-    client_options = ClientOptions(api_endpoint=f"{location}-documentai.googleapis.com")
-    client = documentai.DocumentProcessorServiceClient(client_options=client_options)
-    processor_name = client.processor_path(project_id, location, processor_id)
+    client, processor_name, documentai = _get_google_client_and_processor()
 
     with open(file_path, "rb") as file_obj:
         content = file_obj.read()
@@ -281,7 +293,8 @@ def _get_paddle_ocr() -> Any:
 
         # PaddleOCR uses lang="korean" for Korean text and still handles common
         # English words/numbers in mixed Korean documents reasonably well.
-        _paddle_ocr = PaddleOCR(use_textline_orientation=True, lang="korean")
+        # enable_mkldnn=False is set to bypass the pir::ArrayAttribute compile bug on Windows CPU.
+        _paddle_ocr = PaddleOCR(use_textline_orientation=True, lang="korean", enable_mkldnn=False)
 
     return _paddle_ocr
 
@@ -296,14 +309,22 @@ def _run_paddle_on_image(ocr: Any, image_path: str) -> str:
     for block in result:
         if not block:
             continue
-        for item in block:
-            if len(item) < 2:
-                continue
-            text_info = item[1]
-            if isinstance(text_info, (list, tuple)) and text_info:
-                line = str(text_info[0]).strip()
+        if isinstance(block, dict):
+            # Support PaddleX / newer PaddleOCR format returning list of dicts
+            rec_texts = block.get("rec_texts", [])
+            for text in rec_texts:
+                line = str(text).strip()
                 if line:
                     lines.append(line)
+        elif isinstance(block, (list, tuple)):
+            for item in block:
+                if not isinstance(item, (list, tuple)) or len(item) < 2:
+                    continue
+                text_info = item[1]
+                if isinstance(text_info, (list, tuple)) and text_info:
+                    line = str(text_info[0]).strip()
+                    if line:
+                        lines.append(line)
 
     return "\n".join(lines).strip()
 

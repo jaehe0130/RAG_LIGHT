@@ -1,4 +1,4 @@
-const ANALYZE_API_URL = "http://127.0.0.1:8000/api/analyze";
+const ANALYZE_API_URL = "/api/analyze";
 const DEFAULT_INPUT_TYPE = "terms";
 
 export async function analyzeDocument({ file, textInput }) {

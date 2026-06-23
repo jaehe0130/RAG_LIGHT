@@ -4,6 +4,12 @@ import asyncio
 import time
 from unittest.mock import MagicMock
 
+# Reconfigure stdout to UTF-8 to handle emojis/Korean on Windows console
+if sys.platform.startswith('win'):
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+
 # 1. CLI 테스트 환경에서 무거운 ML 모델 로딩을 막기 위한 Mocking 적용
 sys.modules['sentence_transformers'] = MagicMock()
 sys.modules['qdrant_client'] = MagicMock()

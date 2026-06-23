@@ -10,6 +10,10 @@ class AgentState(TypedDict):
     # 다중 지식베이스 결합 검색 + reranker 결과 저장소
     retrieved_docs: List[str]     # 공정위+소비자원 통합 reranking 상위 결과
     
+    # 분류 및 규칙 검증 결과 (병렬 처리 지원용)
+    classified_type: str          # 분류된 문서 카테고리 (SPORTS, ECOMMERCE 등)
+    audit_report: List[Dict[str, Any]] # 정량 위반 룰 검출 내역
+    
     llm_analysis: str             # OpenAI API 기반 친근한 법률 요약/해설
     toxic_clauses: List[Dict[str, Any]] # 추출된 불공정 독소조항 및 기만행위 목록
     signal_color: str             # ● 안전 / ● 주의 / ● 위험 최종 라벨

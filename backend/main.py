@@ -11,7 +11,12 @@ from langgraph.graph import END, StateGraph
 from models import AgentState, AnalysisResponse, ChatRequest, ChatResponse
 from modules.ocr import extract_text, is_supported_upload, run_ocr_node
 from modules.rag_search import search_rag_node
-from modules.rule_validator import validate_rules_node
+from modules.rule_validator import (
+    classifier_node,
+    rule_auditor_node,
+    legal_analyst_node,
+    consensus_supervisor_node
+)
 from modules.chat_agent import generate_chat_response, call_chat_llm
 from modules.templates import FORM_TEMPLATES
 
@@ -86,26 +91,82 @@ def ocr_node_wrapper(state: AgentState) -> dict:
     return {"raw_text": result.get("raw_text", "")}
 
 
+def start_node(state: AgentState) -> dict:
+    """Lightweight dummy starting node to branch into parallel nodes."""
+    return {}
+
+
+def classification_audit_node(state: AgentState) -> dict:
+    """Run Classifier and Rule Auditor sequentially in one branch of the graph."""
+    print("\n[Node] Classifier + Rule Auditor (병렬 브랜치 시작)")
+    t0 = time.time()
+    
+    c_res = classifier_node(state)
+    
+    auditor_state = {**state, **c_res}
+    a_res = rule_auditor_node(auditor_state)
+    
+    print(f"[Timer ⏱️] Classifier + Rule Auditor 완료 소요 시간: {time.time() - t0:.2f}초")
+    return {**c_res, **a_res}
+
+
+def legal_validation_node(state: AgentState) -> dict:
+    """Run Legal Analyst and Consensus Supervisor, supporting self-correction feedback loop."""
+    print("\n[Node] Legal Analyst + Consensus Supervisor (병렬 브랜치 합류 및 검증)")
+    t0 = time.time()
+    
+    analyst_res = legal_analyst_node(state)
+    
+    supervisor_state = {**state, **analyst_res}
+    supervisor_res = consensus_supervisor_node(supervisor_state)
+    
+    # Self-Correction Feedback Loop (최대 1회 재실행)
+    if supervisor_res.get("critique_feedback") and supervisor_res.get("correction_count", 0) <= 1:
+        print("\n[Node] ⚠️ Self-Correction 교정 피드백 발생! Legal Analyst 재가동")
+        supervisor_state["correction_count"] = supervisor_state.get("correction_count", 0) + 1
+        supervisor_state["critique_feedback"] = supervisor_res["critique_feedback"]
+        
+        analyst_res = legal_analyst_node(supervisor_state)
+        supervisor_state = {**supervisor_state, **analyst_res}
+        supervisor_res = consensus_supervisor_node(supervisor_state)
+        
+    print(f"[Timer ⏱️] Legal Validation 완료 소요 시간: {time.time() - t0:.2f}초")
+    return {
+        "llm_analysis": supervisor_res["llm_analysis"],
+        "toxic_clauses": supervisor_res["toxic_clauses"],
+        "signal_color": supervisor_res["signal_color"]
+    }
+
+
 workflow = StateGraph(AgentState)
 workflow.add_node("ocr", ocr_node_wrapper)
 workflow.add_node("rag", search_rag_node)
-workflow.add_node("validate", validate_rules_node)
+workflow.add_node("classification_audit", classification_audit_node)
+workflow.add_node("validate", legal_validation_node)
 workflow.add_node("report", report_generation_node)
 
 workflow.set_entry_point("ocr")
 workflow.add_edge("ocr", "rag")
+workflow.add_edge("ocr", "classification_audit")
 workflow.add_edge("rag", "validate")
+workflow.add_edge("classification_audit", "validate")
 workflow.add_edge("validate", "report")
 workflow.add_edge("report", END)
 
 compiled_graph = workflow.compile()
 
 analysis_workflow = StateGraph(AgentState)
+analysis_workflow.add_node("start", start_node)
 analysis_workflow.add_node("rag", search_rag_node)
-analysis_workflow.add_node("validate", validate_rules_node)
+analysis_workflow.add_node("classification_audit", classification_audit_node)
+analysis_workflow.add_node("validate", legal_validation_node)
 analysis_workflow.add_node("report", report_generation_node)
-analysis_workflow.set_entry_point("rag")
+
+analysis_workflow.set_entry_point("start")
+analysis_workflow.add_edge("start", "rag")
+analysis_workflow.add_edge("start", "classification_audit")
 analysis_workflow.add_edge("rag", "validate")
+analysis_workflow.add_edge("classification_audit", "validate")
 analysis_workflow.add_edge("validate", "report")
 analysis_workflow.add_edge("report", END)
 
@@ -330,6 +391,8 @@ async def analyze_contract(
         "input_type": backend_input_type,
         "raw_text": raw_text,
         "retrieved_docs": [],
+        "classified_type": "OTHER",
+        "audit_report": [],
         "llm_analysis": "",
         "toxic_clauses": [],
         "signal_color": "",
